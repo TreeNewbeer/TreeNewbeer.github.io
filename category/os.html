@@ -1,446 +1,147 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-        <meta charset="utf-8" />
-        <title>TreeNewbeer's blog - OS</title>
-        <link rel="stylesheet" href="/theme/css/main.css" />
-        <link href="/feeds/all.atom.xml" type="application/atom+xml" rel="alternate" title="TreeNewbeer's blog Atom Feed" />
-        <link href="/feeds/all.rss.xml" type="application/rss+xml" rel="alternate" title="TreeNewbeer's blog RSS Feed" />
-</head>
+  <head>
+    <meta charset="utf-8" />
+    <title>TreeNewbeer's blog - OS | TreeNewbeer's blog</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="keywords" content="" />
+    <meta name="author" content="TreeNewbeer" />
+    <meta name="kittycheck_rumble" content="true" />
+    <meta name="kittycheck_position" content="top=60,right=60" />
 
-<body id="index" class="home">
-        <header id="banner" class="body">
-                <h1><a href="/">TreeNewbeer's blog </a></h1>
-                <nav><ul>
-                    <li class="active"><a href="/category/os.html">OS</a></li>
-                </ul></nav>
-        </header><!-- /#banner -->
+    <!-- Le styles -->
+    <link rel="stylesheet" href="/theme/css/bootstrap.min.css" type="text/css" />
+    <style type="text/css">
+      body {
+        padding-top: 60px;
+        padding-bottom: 40px;
+      }
+      .sidebar-nav {
+        padding: 9px 0;
+      }
+      .tag-1 {
+        font-size: 13pt;
+      }
+      .tag-2 {
+        font-size: 10pt;
+      }
+      .tag-2 {
+        font-size: 8pt;
+      }
+      .tag-4 {
+        font-size: 6pt;
+     }
+    </style>
+    <link href="/theme/css/bootstrap-responsive.min.css" rel="stylesheet">
+    <link href="/theme/css/font-awesome.css" rel="stylesheet">
+    <link href="/theme/css/pygments.css" rel="stylesheet">
 
-            <aside id="featured" class="body">
-                <article>
-                    <h1 class="entry-title"><a href="/My-first-post.html">ESP-IDF FreeRTOS 任务创建分析</a></h1>
-<footer class="post-info">
-        <abbr class="published" title="2019-10-06T00:00:00+08:00">
-                Published: Sun 06 October 2019
-        </abbr>
-		<br />
-        <abbr class="modified" title="2019-10-06T00:00:00+08:00">
-                Updated: Sun 06 October 2019
-        </abbr>
+    <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="//html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
 
-        <address class="vcard author">
-                By                         <a class="url fn" href="/author/treenewbeer.html">TreeNewbeer</a>
-        </address>
-<p>In <a href="/category/os.html">OS</a>.</p>
-<p>tags: <a href="/tag/freertos.html">FreeRTOS</a> </p>
-</footer><!-- /.post-info --><h1>ESP-IDF FreeRTOS 任务创建分析</h1>
-<p>标签（空格分隔）： ESP-IDF-FreeRTOS</p>
-<hr>
-<h2>任务创建API</h2>
-<hr>
-<p>FreeRTOS的任务创建有两种方式，静态创建与动态创建，这两种方式最大的区别就是静态创建需要在外部传入两个内存块的指针用来存放任务List与任务TCB,因此不可自动回收，而动态创建任务在调用任务删除函数时内存会被系统回收。因此我们在分析FreeRTOS任务创建的相关代码时只需要分析其中一种即可。</p>
-<p>ESP-IDF版本的FreeRTOS为了能够充分利用ESP32的双核优势，因此把Amazon FreeRTOS扩展了SMP支持，其中大家熟悉的任务创建函数<code>xTaskCreate()</code>变成了一个“胶水函数”，直接返回<code>xTaskCreatePinnedToCore()</code>，因此，我们重点分析一下这个函数，首先看一下函数声明：</p>
-<div class="highlight"><pre><span></span>    <span class="n">BaseType_t</span> <span class="n">xTaskCreatePinnedToCore</span><span class="p">(</span> <span class="n">TaskFunction_t</span> <span class="n">pxTaskCode</span><span class="p">,</span>
-                                        <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span> <span class="k">const</span> <span class="n">pcName</span><span class="p">,</span>
-                                        <span class="k">const</span> <span class="kt">uint32_t</span> <span class="n">usStackDepth</span><span class="p">,</span>
-                                        <span class="kt">void</span> <span class="o">*</span> <span class="k">const</span> <span class="n">pvParameters</span><span class="p">,</span>
-                                        <span class="n">UBaseType_t</span> <span class="n">uxPriority</span><span class="p">,</span>
-                                        <span class="n">TaskHandle_t</span> <span class="o">*</span> <span class="k">const</span> <span class="n">pxCreatedTask</span><span class="p">,</span>
-                                        <span class="k">const</span> <span class="n">BaseType_t</span> <span class="n">xCoreID</span> <span class="p">)</span>
-</pre></div>
+    <!-- Le fav and touch icons -->
+    <link rel="shortcut icon" href="/theme/img/favicon.ico">
+    <link rel="apple-touch-icon" href="/theme/img/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="/theme/img/apple-touch-icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="/theme/img/apple-touch-icon-114x114.png">
+
+    <link href="/" type="application/atom+xml" rel="alternate" title="TreeNewbeer's blog ATOM Feed" />
+  </head>
+  <body>
+    <div class="navbar navbar-fixed-top">
+      <div class="navbar-inner">
+        <div class="container-fluid">
+          <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </a>
+          <a class="brand" href="/index.html">TreeNewbeer's blog </a>
+          <div class="nav-collapse">
+            <ul class="nav">
+                <li class="divider-vertical"></li>
+                <li class="active">
+                  <a href="/category/os.html">
+						        <i class="icon-folder-open icon-large"></i>OS
+					         </a>
+                </li>
+              <ul class="nav pull-right">
+                    <li><a href="/"><i class="icon-th-list"></i>Archives</a></li>
+              </ul>
+
+            </ul>
+            <!--<p class="navbar-text pull-right">Logged in as <a href="#">username</a></p>-->
+          </div><!--/.nav-collapse -->
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="row">
+        <div class="span8" id="content">
+<div class="row">
+    <div class="span2">
+        <div class="well small"><footer class="post-info">
+<abbr class="published" title="2019-10-06T00:00:00+08:00">
+    <i class="icon-calendar"></i>&nbsp;Sun 06 October 2019
+</abbr>
+<br/><a href="/author/treenewbeer.html"><i class="icon-user"></i>&nbsp;TreeNewbeer</a>
 
 
-<p>这个API的作用是创建一个任务，并且给这个任务指定一个物理核去运行，当<code>xCoreID</code>的值为<code>tskNO_AFFINITY</code>时，这个任务就是核心无关的，也就是交给系统自己去决定使用哪一个物理核，并且在任务调度过程中也可以切换物理核去运行。</p>
-<ul>
+<br/>
+	&nbsp;&nbsp;<a href="/tag/freertos.html" class="label"><i class="icon-tag"></i>&nbsp;FreeRTOS</a>
+</footer><!-- /.post-info --></div>
+    </div>
+    <div class="span6">
+        <div class="article well">
+            <h1><a href="/My-first-post.html">ESP-IDF FreeRTOS 任务创建分析</a></h1>
+            <div class="summary">
+                <a class="btn btn-small" href="/My-first-post.html">more ...</a>
+            </div>
+        </div>
+    </div>
+    <div class="span8">
+        <hr />
+    </div>
+
+<div class="span6">
+</div>
+</div>
+        </div><!--/span-->
+        <div class="span3 well sidebar-nav" id="sidebar">
+<ul class="nav nav-list">
+<li class="nav-header"><h4><i class="icon-external-link"></i>blogroll</h4></li>
+    <li><div><i class="icon-external-link"></i><a href="http://getpelican.com/">Pelican</a></div></li>
+    <li><div><i class="icon-external-link"></i><a href="http://python.org/">Python.org</a></div></li>
+    <li><div><i class="icon-external-link"></i><a href="http://jinja.pocoo.org/">Jinja2</a></div></li>
+    <li><div><i class="icon-external-link"></i><a href="#">You can modify those links in your config file</a></div></li>
+<li class="nav-header"><h4><i class="icon-home icon-large"></i> social</h4></li>
+    <li><a href="#"><i class="icon-You can add links in your config file-sign icon-large"></i>You can add links in your config file</a></li>
+    <li><a href="#"><i class="icon-Another social link-sign icon-large"></i>Another social link</a></li>
+
+<li class="nav-header"><h4><i class="icon-folder-close icon-large"></i>Categories</h4></li>
 <li>
-<p><code>pxTaskCode</code>：函数指针，指向任务函数入口，任务必须是一个<em>不可返回的函数</em>。</p>
+<a href="/category/os.html">
+    <i class="icon-folder-open icon-large"></i>OS
+</a>
 </li>
-<li>
-<p><code>pcName</code>：字符串指针，最大长度由<code>configMAX_TASK_NAME_LEN</code>宏决定，用于调试。</p>
-</li>
-<li>
-<p><code>usStackDepth</code>：任务堆栈的大小（堆栈深度），这里要注意一下，在Amazon FreeRTOS中单位是<em>word</em>,因为<code>portSTACK_TYPE</code>被定义成了<code>uint32_t</code>类型，而ESP-IDF FreeRTOS是<code>uint8_t</code>类型的，所以任务堆栈大小的单位是<em>byte</em>而不是<em>word</em>。</p>
-</li>
-<li>
-<p><code>pvParameters</code>：参数指针，在任务创建的时候作为一个参数传递给任务。</p>
-</li>
-<li><code>uxPriority</code>：任务的优先级，数字越大优先级越高。</li>
-<li><code>pxCreatedTask</code>：任务句柄，相当于是这个任务的"身份证号码"，后面任务删除等操作一个任务句柄来对任务进行控制。</li>
-<li><code>xCoreID</code>：物理核ID，为0时把任务固定在<em>PRO_CPU</em>上运行，为1时把任务固定在<em>APP_CPU</em>上运行，一旦固定了某一个CPU，则在任务调度中不可切换物理核心。</li>
-</ul>
-<h2>程序控制块TCB</h2>
-<hr>
-<p>分析完任务创建API的各个参数含义之后，接下来就是深入分析函数的实现，但在这之前，我想先介绍一个数据结构——任务控制块（TCB），这个数据结构可以说是一个操作系统最为核心的数据结构没有之一，原本这个数据结构使用的名字是<code>tskTCB</code>,新版的FreeRTOS使用<code>typedef</code>声明成了<code>TCB_t</code>，具体从哪个版本开始忘了。结构类型如下：</p>
-<div class="highlight"><pre><span></span><span class="k">typedef</span> <span class="k">struct</span> <span class="n">tskTaskControlBlock</span>
-<span class="p">{</span>
-    <span class="k">volatile</span> <span class="n">StackType_t</span>    <span class="o">*</span><span class="n">pxTopOfStack</span><span class="p">;</span>
-    <span class="cp">#if ( portUSING_MPU_WRAPPERS == 1 )</span>
-        <span class="n">xMPU_SETTINGS</span>   <span class="n">xMPUSettings</span><span class="p">;</span>
-    <span class="cp">#endif</span>
-
-    <span class="n">ListItem_t</span>          <span class="n">xGenericListItem</span><span class="p">;</span>
-    <span class="n">ListItem_t</span>          <span class="n">xEventListItem</span><span class="p">;</span>
-    <span class="n">UBaseType_t</span>         <span class="n">uxPriority</span><span class="p">;</span>
-    <span class="n">StackType_t</span>         <span class="o">*</span><span class="n">pxStack</span><span class="p">;</span>
-    <span class="kt">char</span>                <span class="n">pcTaskName</span><span class="p">[</span> <span class="n">configMAX_TASK_NAME_LEN</span> <span class="p">];</span>
-    <span class="n">BaseType_t</span>          <span class="n">xCoreID</span><span class="p">;</span>
-    <span class="cp">#if ( portSTACK_GROWTH &gt; 0 || configENABLE_TASK_SNAPSHOT == 1 )</span>
-        <span class="n">StackType_t</span>     <span class="o">*</span><span class="n">pxEndOfStack</span><span class="p">;</span>
-    <span class="cp">#endif</span>
-
-    <span class="cp">#if ( portCRITICAL_NESTING_IN_TCB == 1 )</span>
-        <span class="n">UBaseType_t</span>     <span class="n">uxCriticalNesting</span><span class="p">;</span>
-        <span class="kt">uint32_t</span>        <span class="n">uxOldInterruptState</span><span class="p">;</span>
-    <span class="cp">#endif</span>
-
-    <span class="cp">#if ( configUSE_TRACE_FACILITY == 1 )</span>
-        <span class="n">UBaseType_t</span>     <span class="n">uxTCBNumber</span><span class="p">;</span>
-        <span class="n">UBaseType_t</span>     <span class="n">uxTaskNumber</span><span class="p">;</span>
-    <span class="cp">#endif</span>
-
-    <span class="cp">#if ( configUSE_MUTEXES == 1 )</span>
-        <span class="n">UBaseType_t</span>     <span class="n">uxBasePriority</span><span class="p">;</span> 
-        <span class="n">UBaseType_t</span>     <span class="n">uxMutexesHeld</span><span class="p">;</span>
-    <span class="cp">#endif</span>
-
-    <span class="cp">#if ( configUSE_APPLICATION_TASK_TAG == 1 )</span>
-        <span class="n">TaskHookFunction_t</span> <span class="n">pxTaskTag</span><span class="p">;</span>
-    <span class="cp">#endif</span>
-
-    <span class="cp">#if( configNUM_THREAD_LOCAL_STORAGE_POINTERS &gt; 0 )</span>
-        <span class="kt">void</span> <span class="o">*</span><span class="n">pvThreadLocalStoragePointers</span><span class="p">[</span> <span class="n">configNUM_THREAD_LOCAL_STORAGE_POINTERS</span> <span class="p">];</span>
-        <span class="cp">#if ( configTHREAD_LOCAL_STORAGE_DELETE_CALLBACKS )</span>
-            <span class="n">TlsDeleteCallbackFunction_t</span> <span class="n">pvThreadLocalStoragePointersDelCallback</span><span class="p">[</span> <span class="n">configNUM_THREAD_LOCAL_STORAGE_POINTERS</span> <span class="p">];</span>
-        <span class="cp">#endif</span>
-    <span class="cp">#endif</span>
-
-    <span class="cp">#if ( configGENERATE_RUN_TIME_STATS == 1 )</span>
-        <span class="kt">uint32_t</span>        <span class="n">ulRunTimeCounter</span><span class="p">;</span>
-    <span class="cp">#endif</span>
-
-    <span class="cp">#if ( configUSE_NEWLIB_REENTRANT == 1 )</span>
-        <span class="k">struct</span>  <span class="n">_reent</span> <span class="n">xNewLib_reent</span><span class="p">;</span>
-    <span class="cp">#endif</span>
-
-    <span class="cp">#if ( configUSE_TASK_NOTIFICATIONS == 1 )</span>
-        <span class="k">volatile</span> <span class="kt">uint32_t</span> <span class="n">ulNotifiedValue</span><span class="p">;</span>
-        <span class="k">volatile</span> <span class="n">eNotifyValue</span> <span class="n">eNotifyState</span><span class="p">;</span>
-    <span class="cp">#endif</span>
-    <span class="cp">#if( tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE != 0 )</span>
-        <span class="kt">uint8_t</span> <span class="n">ucStaticallyAllocated</span><span class="p">;</span> 
-    <span class="err">#</span><span class="n">endif</span>
-<span class="p">}</span> <span class="n">tskTCB</span><span class="p">;</span>
-</pre></div>
 
 
-<p>这个数据结构有点长而且注释也多，为了方便查看我把注释删掉了而且重新排版了一下，下面详细介绍一下这些成员(由于成员实在是太多了，篇幅有限，我只详细描述一下和本文主题有关的，其他的留在后面的文章介绍)：</p>
-<ul>
-<li><code>pxTopOfStack</code>：堆栈栈顶指针，永远指向最后一个入栈的元素。</li>
-<li><code>xGenericListItem</code>：状态列表项，通过这个列表项的pcContainer成员来判断当前列表项属于哪一个List(Ready, Blocked, Suspended )从而确定当前task的状态</li>
-<li><code>xEventListItem</code>：时间列表项，在事件列表中按照优先级降序排列</li>
-<li><code>uxPriority</code>：任务优先级，从0开始，数字越大优先级越高</li>
-<li><code>pxStack</code>：堆栈指针，指向任务堆栈的起始地址</li>
-<li><code>pcTaskName</code>：字符串数组，用来保存任务名字</li>
-<li><code>xCoreID</code>：物理核ID，记录当前task所在的物理核</li>
-</ul>
-<p>与任务创建有关的数据结构解释完了，接下来直接进入<code>xTaskCreatePinnedToCore()</code>函数内部：</p>
-<div class="highlight"><pre><span></span>    <span class="n">TCB_t</span> <span class="o">*</span><span class="n">pxNewTCB</span><span class="p">;</span>
-    <span class="n">BaseType_t</span> <span class="n">xReturn</span><span class="p">;</span>
 
-    <span class="n">StackType_t</span> <span class="o">*</span><span class="n">pxStack</span><span class="p">;</span>
+</ul>        </div><!--/.well -->
 
-    <span class="cm">/* Allocate space for the stack used by the task being created. */</span>
-    <span class="n">pxStack</span> <span class="o">=</span> <span class="p">(</span> <span class="n">StackType_t</span> <span class="o">*</span> <span class="p">)</span> <span class="n">pvPortMallocStackMem</span><span class="p">(</span> <span class="p">(</span> <span class="p">(</span> <span class="p">(</span> <span class="kt">size_t</span> <span class="p">)</span> <span class="n">usStackDepth</span> <span class="p">)</span> <span class="o">*</span> <span class="k">sizeof</span><span class="p">(</span> <span class="n">StackType_t</span> <span class="p">)</span> <span class="p">)</span> <span class="p">);</span>
+      </div><!--/row-->
 
-    <span class="k">if</span><span class="p">(</span> <span class="n">pxStack</span> <span class="o">!=</span> <span class="nb">NULL</span> <span class="p">)</span>
-    <span class="p">{</span>
-        <span class="cm">/* Allocate space for the TCB. */</span>
-        <span class="n">pxNewTCB</span> <span class="o">=</span> <span class="p">(</span> <span class="n">TCB_t</span> <span class="o">*</span> <span class="p">)</span> <span class="n">pvPortMallocTcbMem</span><span class="p">(</span> <span class="k">sizeof</span><span class="p">(</span> <span class="n">TCB_t</span> <span class="p">)</span> <span class="p">);</span> 
-        <span class="k">if</span><span class="p">(</span> <span class="n">pxNewTCB</span> <span class="o">!=</span> <span class="nb">NULL</span> <span class="p">)</span>
-        <span class="p">{</span>
-            <span class="cm">/* Store the stack location in the TCB. */</span>
-            <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">pxStack</span> <span class="o">=</span> <span class="n">pxStack</span><span class="p">;</span>
-        <span class="p">}</span>
-        <span class="k">else</span>
-        <span class="p">{</span>
-            <span class="cm">/* The stack cannot be used as the TCB was not created.  Free it again. */</span>
-            <span class="n">vPortFree</span><span class="p">(</span> <span class="n">pxStack</span> <span class="p">);</span>
-        <span class="p">}</span>
-    <span class="p">}</span>
-    <span class="k">else</span>
-    <span class="p">{</span>
-        <span class="n">pxNewTCB</span> <span class="o">=</span> <span class="nb">NULL</span><span class="p">;</span>
-    <span class="p">}</span>
+      <hr>
 
-    <span class="k">if</span><span class="p">(</span> <span class="n">pxNewTCB</span> <span class="o">!=</span> <span class="nb">NULL</span> <span class="p">)</span>
-    <span class="p">{</span>
-        <span class="cp">#if( tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE != 0 )</span>
-        <span class="p">{</span>
-            <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">ucStaticallyAllocated</span> <span class="o">=</span> <span class="n">tskDYNAMICALLY_ALLOCATED_STACK_AND_TCB</span><span class="p">;</span>
-        <span class="p">}</span>
-        <span class="cp">#endif </span><span class="cm">/* configSUPPORT_STATIC_ALLOCATION */</span><span class="cp"></span>
-
-        <span class="n">prvInitialiseNewTask</span><span class="p">(</span> <span class="n">pxTaskCode</span><span class="p">,</span> <span class="n">pcName</span><span class="p">,</span> <span class="n">usStackDepth</span><span class="p">,</span> <span class="n">pvParameters</span><span class="p">,</span> <span class="n">uxPriority</span><span class="p">,</span> <span class="n">pxCreatedTask</span><span class="p">,</span> <span class="n">pxNewTCB</span><span class="p">,</span> <span class="nb">NULL</span><span class="p">,</span> <span class="n">xCoreID</span> <span class="p">);</span>
-        <span class="n">prvAddNewTaskToReadyList</span><span class="p">(</span> <span class="n">pxNewTCB</span><span class="p">,</span> <span class="n">pxTaskCode</span><span class="p">,</span> <span class="n">xCoreID</span> <span class="p">);</span>
-        <span class="n">xReturn</span> <span class="o">=</span> <span class="n">pdPASS</span><span class="p">;</span>
-    <span class="p">}</span>
-    <span class="k">else</span>
-    <span class="p">{</span>
-        <span class="n">xReturn</span> <span class="o">=</span> <span class="n">errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY</span><span class="p">;</span>
-    <span class="p">}</span>
-    <span class="k">return</span> <span class="n">xReturn</span><span class="p">;</span>
-</pre></div>
+    </div><!--/.fluid-container-->
 
 
-<p>(代码为了方便观察，我删掉了一个条件编译宏<code>portSTACK_GROWTH</code>的那一部分并重新排版了一下，这个是选择堆栈增长方向的，并不会影响我们的研究。)
-首先看到前半部分（Line 1-28）在分配任务堆栈与程序控制块的内存，分配结束后内存空间大概类似下图：
-<img alt="Selection_008.png-9.8kB" src="http://static.zybuluo.com/TreeNewbee/vhipp6biifsm67ldjc2iofi7/Selection_008.png"></p>
-<h2>初始化任务列表与列表项</h2>
-<hr>
-<p>然后查看剩余部分中出现的两个函数：<code>prvInitialiseNewTask()</code> <code>prvAddNewTaskToReadyList()</code>，这两个函数的作用是初始化TCB中的成员并且把任务加入到<em>就绪任务列表</em>，然后完成了一次任务创建的整个流程。现在我们继续深入分析这两个函数具体做了啥。首先看一下<code>prvInitialiseNewTask()</code>的源码：</p>
-<div class="highlight"><pre><span></span><span class="k">static</span> <span class="kt">void</span> <span class="nf">prvInitialiseNewTask</span><span class="p">(</span>   <span class="n">TaskFunction_t</span> <span class="n">pxTaskCode</span><span class="p">,</span>
-                                    <span class="k">const</span> <span class="kt">char</span> <span class="o">*</span> <span class="k">const</span> <span class="n">pcName</span><span class="p">,</span>
-                                    <span class="k">const</span> <span class="kt">uint32_t</span> <span class="n">ulStackDepth</span><span class="p">,</span>
-                                    <span class="kt">void</span> <span class="o">*</span> <span class="k">const</span> <span class="n">pvParameters</span><span class="p">,</span>
-                                    <span class="n">UBaseType_t</span> <span class="n">uxPriority</span><span class="p">,</span>
-                                    <span class="n">TaskHandle_t</span> <span class="o">*</span> <span class="k">const</span> <span class="n">pxCreatedTask</span><span class="p">,</span>
-                                    <span class="n">TCB_t</span> <span class="o">*</span><span class="n">pxNewTCB</span><span class="p">,</span>
-                                    <span class="k">const</span> <span class="n">MemoryRegion_t</span> <span class="o">*</span> <span class="k">const</span> <span class="n">xRegions</span><span class="p">,</span> <span class="k">const</span> <span class="n">BaseType_t</span> <span class="n">xCoreID</span> <span class="p">)</span>
-<span class="p">{</span>
-    <span class="n">StackType_t</span> <span class="o">*</span><span class="n">pxTopOfStack</span><span class="p">;</span>
-    <span class="n">UBaseType_t</span> <span class="n">x</span><span class="p">;</span>
-
-    <span class="cp">#if( ( configCHECK_FOR_STACK_OVERFLOW &gt; 1 ) || ( configUSE_TRACE_FACILITY == 1 ) || ( INCLUDE_uxTaskGetStackHighWaterMark == 1 ) )</span>
-    <span class="p">{</span>
-        <span class="p">(</span> <span class="kt">void</span> <span class="p">)</span> <span class="n">memset</span><span class="p">(</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">pxStack</span><span class="p">,</span> <span class="p">(</span> <span class="kt">int</span> <span class="p">)</span> <span class="n">tskSTACK_FILL_BYTE</span><span class="p">,</span> <span class="p">(</span> <span class="kt">size_t</span> <span class="p">)</span> <span class="n">ulStackDepth</span> <span class="o">*</span> <span class="k">sizeof</span><span class="p">(</span> <span class="n">StackType_t</span> <span class="p">)</span> <span class="p">);</span>
-    <span class="p">}</span>
-    <span class="cp">#endif</span>
-
-    <span class="n">pxTopOfStack</span> <span class="o">=</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">pxStack</span> <span class="o">+</span> <span class="p">(</span> <span class="n">ulStackDepth</span> <span class="o">-</span> <span class="p">(</span> <span class="kt">uint32_t</span> <span class="p">)</span> <span class="mi">1</span> <span class="p">);</span>
-
-    <span class="n">pxTopOfStack</span> <span class="o">=</span> <span class="p">(</span> <span class="n">StackType_t</span> <span class="o">*</span> <span class="p">)</span> <span class="p">(</span> <span class="p">(</span> <span class="p">(</span> <span class="n">portPOINTER_SIZE_TYPE</span> <span class="p">)</span> <span class="n">pxTopOfStack</span> <span class="p">)</span> <span class="o">&amp;</span> 
-                                     <span class="p">(</span> <span class="o">~</span><span class="p">(</span> <span class="p">(</span> <span class="n">portPOINTER_SIZE_TYPE</span> <span class="p">)</span> <span class="n">portBYTE_ALIGNMENT_MASK</span> <span class="p">)</span> <span class="p">)</span> <span class="p">);</span>
-
-    <span class="n">configASSERT</span><span class="p">(</span> <span class="p">(</span> <span class="p">(</span> <span class="p">(</span> <span class="n">portPOINTER_SIZE_TYPE</span> <span class="p">)</span> <span class="n">pxTopOfStack</span> <span class="o">&amp;</span> <span class="p">(</span> <span class="n">portPOINTER_SIZE_TYPE</span> <span class="p">)</span> <span class="n">portBYTE_ALIGNMENT_MASK</span> <span class="p">)</span> <span class="o">==</span> <span class="mi">0UL</span> <span class="p">)</span> <span class="p">);</span>
-    <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">pxEndOfStack</span> <span class="o">=</span> <span class="n">pxTopOfStack</span><span class="p">;</span>
-
-    <span class="k">for</span><span class="p">(</span> <span class="n">x</span> <span class="o">=</span> <span class="p">(</span> <span class="n">UBaseType_t</span> <span class="p">)</span> <span class="mi">0</span><span class="p">;</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="p">(</span> <span class="n">UBaseType_t</span> <span class="p">)</span> <span class="n">configMAX_TASK_NAME_LEN</span><span class="p">;</span> <span class="n">x</span><span class="o">++</span> <span class="p">)</span>
-    <span class="p">{</span>
-        <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">pcTaskName</span><span class="p">[</span> <span class="n">x</span> <span class="p">]</span> <span class="o">=</span> <span class="n">pcName</span><span class="p">[</span> <span class="n">x</span> <span class="p">];</span>
-
-        <span class="k">if</span><span class="p">(</span> <span class="n">pcName</span><span class="p">[</span> <span class="n">x</span> <span class="p">]</span> <span class="o">==</span> <span class="mh">0x00</span> <span class="p">)</span>
-        <span class="p">{</span>
-            <span class="k">break</span><span class="p">;</span>
-        <span class="p">}</span>
-        <span class="k">else</span>
-        <span class="p">{</span>
-            <span class="n">mtCOVERAGE_TEST_MARKER</span><span class="p">();</span>
-        <span class="p">}</span>
-    <span class="p">}</span>
-
-    <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">pcTaskName</span><span class="p">[</span> <span class="n">configMAX_TASK_NAME_LEN</span> <span class="o">-</span> <span class="mi">1</span> <span class="p">]</span> <span class="o">=</span> <span class="sc">&#39;\0&#39;</span><span class="p">;</span>
-
-    <span class="k">if</span><span class="p">(</span> <span class="n">uxPriority</span> <span class="o">&gt;=</span> <span class="p">(</span> <span class="n">UBaseType_t</span> <span class="p">)</span> <span class="n">configMAX_PRIORITIES</span> <span class="p">)</span>
-    <span class="p">{</span>
-        <span class="n">uxPriority</span> <span class="o">=</span> <span class="p">(</span> <span class="n">UBaseType_t</span> <span class="p">)</span> <span class="n">configMAX_PRIORITIES</span> <span class="o">-</span> <span class="p">(</span> <span class="n">UBaseType_t</span> <span class="p">)</span> <span class="mi">1U</span><span class="p">;</span>
-    <span class="p">}</span>
-    <span class="k">else</span>
-    <span class="p">{</span>
-        <span class="n">mtCOVERAGE_TEST_MARKER</span><span class="p">();</span>
-    <span class="p">}</span>
-
-    <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">uxPriority</span> <span class="o">=</span> <span class="n">uxPriority</span><span class="p">;</span>
-    <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">xCoreID</span> <span class="o">=</span> <span class="n">xCoreID</span><span class="p">;</span>
-    <span class="cp">#if ( configUSE_MUTEXES == 1 )</span>
-    <span class="p">{</span>
-        <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">uxBasePriority</span> <span class="o">=</span> <span class="n">uxPriority</span><span class="p">;</span>
-        <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">uxMutexesHeld</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
-    <span class="p">}</span>
-    <span class="cp">#endif </span><span class="cm">/* configUSE_MUTEXES */</span><span class="cp"></span>
-
-    <span class="n">vListInitialiseItem</span><span class="p">(</span> <span class="o">&amp;</span><span class="p">(</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">xGenericListItem</span> <span class="p">)</span> <span class="p">);</span>
-    <span class="n">vListInitialiseItem</span><span class="p">(</span> <span class="o">&amp;</span><span class="p">(</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">xEventListItem</span> <span class="p">)</span> <span class="p">);</span>
-    <span class="n">listSET_LIST_ITEM_OWNER</span><span class="p">(</span> <span class="o">&amp;</span><span class="p">(</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">xGenericListItem</span> <span class="p">),</span> <span class="n">pxNewTCB</span> <span class="p">);</span>
-    <span class="n">listSET_LIST_ITEM_VALUE</span><span class="p">(</span> <span class="o">&amp;</span><span class="p">(</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">xEventListItem</span> <span class="p">),</span> <span class="p">(</span> <span class="n">TickType_t</span> <span class="p">)</span> <span class="n">configMAX_PRIORITIES</span> <span class="o">-</span> <span class="p">(</span> <span class="n">TickType_t</span> <span class="p">)</span> <span class="n">uxPriority</span> <span class="p">);</span>
-    <span class="n">listSET_LIST_ITEM_OWNER</span><span class="p">(</span> <span class="o">&amp;</span><span class="p">(</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">xEventListItem</span> <span class="p">),</span> <span class="n">pxNewTCB</span> <span class="p">);</span>
-
-    <span class="k">if</span><span class="p">(</span> <span class="p">(</span> <span class="kt">void</span> <span class="o">*</span> <span class="p">)</span> <span class="n">pxCreatedTask</span> <span class="o">!=</span> <span class="nb">NULL</span> <span class="p">)</span>
-    <span class="p">{</span>
-        <span class="o">*</span><span class="n">pxCreatedTask</span> <span class="o">=</span> <span class="p">(</span> <span class="n">TaskHandle_t</span> <span class="p">)</span> <span class="n">pxNewTCB</span><span class="p">;</span>
-    <span class="p">}</span>
-    <span class="k">else</span>
-    <span class="p">{</span>
-        <span class="n">mtCOVERAGE_TEST_MARKER</span><span class="p">();</span>
-    <span class="p">}</span>
-<span class="p">}</span>
-</pre></div>
-
-
-<p>由于这个函数实在是太长了，我只保留与本文有关的部分以及默认开启的宏。这个函数的主要作用是初始化新任务。</p>
-<p>首先前面部分使用<code>tskSTACK_FILL_BYTE</code>(0xa5)填充任务堆栈，用来检测堆栈溢出，然后计算栈顶、栈底两个指针的位置，栈底指针只有在地址向下增长时才起作用。然后拷贝任务名字并末尾补充一个<code>\0</code>，限制优先级在<code>configMAX_PRIORITIES - 1</code>之内，设置coreid。重点在下面几行初始化列表与列表项的代码：</p>
-<div class="highlight"><pre><span></span>    <span class="n">vListInitialiseItem</span><span class="p">(</span> <span class="o">&amp;</span><span class="p">(</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">xGenericListItem</span> <span class="p">)</span> <span class="p">);</span>
-    <span class="n">vListInitialiseItem</span><span class="p">(</span> <span class="o">&amp;</span><span class="p">(</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">xEventListItem</span> <span class="p">)</span> <span class="p">);</span>
-    <span class="n">listSET_LIST_ITEM_OWNER</span><span class="p">(</span> <span class="o">&amp;</span><span class="p">(</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">xGenericListItem</span> <span class="p">),</span> <span class="n">pxNewTCB</span> <span class="p">);</span>
-    <span class="n">listSET_LIST_ITEM_VALUE</span><span class="p">(</span> <span class="o">&amp;</span><span class="p">(</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">xEventListItem</span> <span class="p">),</span> <span class="p">(</span> <span class="n">TickType_t</span> <span class="p">)</span> <span class="n">configMAX_PRIORITIES</span> <span class="o">-</span> <span class="p">(</span> <span class="n">TickType_t</span> <span class="p">)</span> <span class="n">uxPriority</span> <span class="p">);</span>
-    <span class="n">listSET_LIST_ITEM_OWNER</span><span class="p">(</span> <span class="o">&amp;</span><span class="p">(</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">xEventListItem</span> <span class="p">),</span> <span class="n">pxNewTCB</span> <span class="p">);</span>
-</pre></div>
-
-
-<p>这几个API我在上一篇介绍列表与列表项<a href="https://www.cnblogs.com/SexyBoyHub/articles/11502483.html">列表与列表项</a>的文章里面分析过，此处不再啰嗦。首先初始化状态列表项与事件列表项，然后把TCB又重新挂接在了两个列表项的<code>pvOwner</code>里面了，这样子我们就可以通过列表项来访问程序控制块，然后把任务<em>优先级的补数</em>保存在事件列表项里面（之前讲解列表项的时候也提到过）。那么进行了这一系列操作之后，新任务TCB的结构就会如下图所示那样子：
-<img alt="Selection_009.png-48.5kB" src="http://static.zybuluo.com/TreeNewbee/8uvopzsk1fjhrs42uwwrja8t/Selection_009.png"></p>
-<h2>分配物理核心并加入就绪列表</h2>
-<hr>
-<p>接着分析一下<code>prvAddNewTaskToReadyList()</code>函数的源码：</p>
-<div class="highlight"><pre><span></span><span class="k">static</span> <span class="kt">void</span> <span class="nf">prvAddNewTaskToReadyList</span><span class="p">(</span> <span class="n">TCB_t</span> <span class="o">*</span><span class="n">pxNewTCB</span><span class="p">,</span> <span class="n">TaskFunction_t</span> <span class="n">pxTaskCode</span><span class="p">,</span> <span class="n">BaseType_t</span> <span class="n">xCoreID</span> <span class="p">)</span>
-<span class="p">{</span>
-    <span class="n">TCB_t</span> <span class="o">*</span><span class="n">curTCB</span><span class="p">,</span> <span class="o">*</span><span class="n">tcb0</span><span class="p">,</span> <span class="o">*</span><span class="n">tcb1</span><span class="p">;</span>
-
-    <span class="n">taskENTER_CRITICAL</span><span class="p">(</span><span class="o">&amp;</span><span class="n">xTaskQueueMutex</span><span class="p">);</span>
-    <span class="p">{</span>
-        <span class="n">uxCurrentNumberOfTasks</span><span class="o">++</span><span class="p">;</span>
-
-        <span class="k">if</span> <span class="p">(</span> <span class="n">xCoreID</span> <span class="o">==</span> <span class="n">tskNO_AFFINITY</span> <span class="p">)</span>
-        <span class="p">{</span>
-            <span class="k">if</span> <span class="p">(</span> <span class="n">portNUM_PROCESSORS</span> <span class="o">==</span> <span class="mi">1</span> <span class="p">)</span>
-            <span class="p">{</span>
-                <span class="n">xCoreID</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
-            <span class="p">}</span>
-            <span class="k">else</span>
-            <span class="p">{</span>
-                <span class="n">tcb0</span> <span class="o">=</span> <span class="n">pxCurrentTCB</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
-                <span class="n">tcb1</span> <span class="o">=</span> <span class="n">pxCurrentTCB</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
-                <span class="k">if</span> <span class="p">(</span> <span class="n">tcb0</span> <span class="o">==</span> <span class="nb">NULL</span> <span class="p">)</span>
-                <span class="p">{</span>
-                    <span class="n">xCoreID</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
-                <span class="p">}</span>
-                <span class="k">else</span> <span class="k">if</span> <span class="p">(</span> <span class="n">tcb1</span> <span class="o">==</span> <span class="nb">NULL</span> <span class="p">)</span>
-                <span class="p">{</span>
-                    <span class="n">xCoreID</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
-                <span class="p">}</span>
-                <span class="k">else</span> <span class="k">if</span> <span class="p">(</span> <span class="n">tcb0</span><span class="o">-&gt;</span><span class="n">uxPriority</span> <span class="o">&lt;</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">uxPriority</span> <span class="o">&amp;&amp;</span> <span class="n">tcb0</span><span class="o">-&gt;</span><span class="n">uxPriority</span> <span class="o">&lt;</span> <span class="n">tcb1</span><span class="o">-&gt;</span><span class="n">uxPriority</span> <span class="p">)</span>
-                <span class="p">{</span>
-                    <span class="n">xCoreID</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
-                <span class="p">}</span>
-                <span class="k">else</span> <span class="k">if</span> <span class="p">(</span> <span class="n">tcb1</span><span class="o">-&gt;</span><span class="n">uxPriority</span> <span class="o">&lt;</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">uxPriority</span> <span class="p">)</span>
-                <span class="p">{</span>
-                    <span class="n">xCoreID</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
-                <span class="p">}</span>
-                <span class="k">else</span>
-                <span class="p">{</span>
-                    <span class="n">xCoreID</span> <span class="o">=</span> <span class="n">xPortGetCoreID</span><span class="p">();</span> <span class="c1">// Both CPU have higher priority tasks running on them, so this won&#39;t run yet</span>
-                <span class="p">}</span>
-            <span class="p">}</span>
-        <span class="p">}</span>
-
-        <span class="k">if</span><span class="p">(</span> <span class="n">pxCurrentTCB</span><span class="p">[</span> <span class="n">xCoreID</span> <span class="p">]</span> <span class="o">==</span> <span class="nb">NULL</span> <span class="p">)</span>
-        <span class="p">{</span>
-            <span class="n">pxCurrentTCB</span><span class="p">[</span> <span class="n">xCoreID</span> <span class="p">]</span> <span class="o">=</span> <span class="n">pxNewTCB</span><span class="p">;</span>
-
-            <span class="k">if</span><span class="p">(</span> <span class="n">uxCurrentNumberOfTasks</span> <span class="o">==</span> <span class="p">(</span> <span class="n">UBaseType_t</span> <span class="p">)</span> <span class="mi">1</span> <span class="p">)</span>
-            <span class="p">{</span>
-            <span class="cp">#if portFIRST_TASK_HOOK</span>
-                <span class="k">if</span> <span class="p">(</span> <span class="n">xPortGetCoreID</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span> <span class="p">)</span> <span class="p">{</span>
-                    <span class="n">vPortFirstTaskHook</span><span class="p">(</span><span class="n">pxTaskCode</span><span class="p">);</span>
-                <span class="p">}</span>
-            <span class="cp">#endif </span><span class="cm">/* configFIRST_TASK_HOOK */</span><span class="cp"></span>
-                <span class="n">prvInitialiseTaskLists</span><span class="p">();</span>
-            <span class="p">}</span>
-            <span class="k">else</span>
-            <span class="p">{</span>
-                <span class="n">mtCOVERAGE_TEST_MARKER</span><span class="p">();</span>
-            <span class="p">}</span>
-        <span class="p">}</span>
-        <span class="k">else</span>
-        <span class="p">{</span>
-            <span class="k">if</span><span class="p">(</span> <span class="n">xSchedulerRunning</span> <span class="o">==</span> <span class="n">pdFALSE</span> <span class="p">)</span>
-            <span class="p">{</span>
-                <span class="k">if</span> <span class="p">(</span> <span class="n">pxCurrentTCB</span><span class="p">[</span><span class="n">xCoreID</span><span class="p">]</span> <span class="o">==</span> <span class="nb">NULL</span> <span class="o">||</span> <span class="n">pxCurrentTCB</span><span class="p">[</span><span class="n">xCoreID</span><span class="p">]</span><span class="o">-&gt;</span><span class="n">uxPriority</span> <span class="o">&lt;=</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">uxPriority</span> <span class="p">)</span>
-                <span class="p">{</span>
-                    <span class="n">pxCurrentTCB</span><span class="p">[</span><span class="n">xCoreID</span><span class="p">]</span> <span class="o">=</span> <span class="n">pxNewTCB</span><span class="p">;</span>
-                <span class="p">}</span>
-            <span class="p">}</span>
-            <span class="k">else</span>
-            <span class="p">{</span>
-                <span class="n">mtCOVERAGE_TEST_MARKER</span><span class="p">();</span>
-            <span class="p">}</span>
-        <span class="p">}</span>
-
-        <span class="n">uxTaskNumber</span><span class="o">++</span><span class="p">;</span>
-
-        <span class="n">traceTASK_CREATE</span><span class="p">(</span> <span class="n">pxNewTCB</span> <span class="p">);</span>
-
-        <span class="n">prvAddTaskToReadyList</span><span class="p">(</span> <span class="n">pxNewTCB</span> <span class="p">);</span>
-
-        <span class="n">portSETUP_TCB</span><span class="p">(</span> <span class="n">pxNewTCB</span> <span class="p">);</span>
-    <span class="p">}</span>
-
-    <span class="n">taskEXIT_CRITICAL</span><span class="p">(</span><span class="o">&amp;</span><span class="n">xTaskQueueMutex</span><span class="p">);</span>
-
-    <span class="k">if</span><span class="p">(</span> <span class="n">xSchedulerRunning</span> <span class="o">!=</span> <span class="n">pdFALSE</span> <span class="p">)</span>
-    <span class="p">{</span>
-        <span class="n">taskENTER_CRITICAL</span><span class="p">(</span><span class="o">&amp;</span><span class="n">xTaskQueueMutex</span><span class="p">);</span>
-
-        <span class="n">curTCB</span> <span class="o">=</span> <span class="n">pxCurrentTCB</span><span class="p">[</span> <span class="n">xCoreID</span> <span class="p">];</span>
-
-        <span class="k">if</span><span class="p">(</span> <span class="n">curTCB</span> <span class="o">==</span> <span class="nb">NULL</span> <span class="o">||</span> <span class="n">curTCB</span><span class="o">-&gt;</span><span class="n">uxPriority</span> <span class="o">&lt;</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">uxPriority</span> <span class="p">)</span>
-        <span class="p">{</span>
-            <span class="k">if</span><span class="p">(</span> <span class="n">xCoreID</span> <span class="o">==</span> <span class="n">xPortGetCoreID</span><span class="p">()</span> <span class="p">)</span>
-            <span class="p">{</span>
-                <span class="n">taskYIELD_IF_USING_PREEMPTION</span><span class="p">();</span>
-            <span class="p">}</span>
-            <span class="k">else</span> <span class="p">{</span>
-                <span class="n">taskYIELD_OTHER_CORE</span><span class="p">(</span><span class="n">xCoreID</span><span class="p">,</span> <span class="n">pxNewTCB</span><span class="o">-&gt;</span><span class="n">uxPriority</span><span class="p">);</span>
-            <span class="p">}</span>
-        <span class="p">}</span>
-        <span class="k">else</span>
-        <span class="p">{</span>
-            <span class="n">mtCOVERAGE_TEST_MARKER</span><span class="p">();</span>
-        <span class="p">}</span>
-        <span class="n">taskEXIT_CRITICAL</span><span class="p">(</span><span class="o">&amp;</span><span class="n">xTaskQueueMutex</span><span class="p">);</span>
-    <span class="p">}</span>
-    <span class="k">else</span>
-    <span class="p">{</span>
-        <span class="n">mtCOVERAGE_TEST_MARKER</span><span class="p">();</span>
-    <span class="p">}</span>
-<span class="p">}</span>
-</pre></div>
-
-
-<p>删掉了断言和一些追踪调试的宏后依然很长。这个函数的作用是把初始化完毕的新任务加入到<em>就绪任务列表</em>中。这个函数直接决定了任务在创建时运行在具体的哪一个物理核。</p>
-<p>首先进入临界区，（这个带全局任务队列锁的临界区API先不分析，后面再开一贴讲，关乎一些SMP调度特性，这也是ESP-IDF FreeRTOS与Amazon FreeRTOS的一个区别比较大的地方。现在只需要知道这里需要禁止上下文切换就够了）<code>uxCurrentNumberOfTasks</code>加一，这是一个静态全局变量，用来记录当前任务数，然后进入if语句判断<code>xCoreID</code>是否为<code>tskNO_AFFINITY</code>(Line 9-40)，如果在创建任务时指定了物理核ID为<code>tskNO_AFFINITY</code>也就是<em>核心无关</em>并且在移植层定义了使用的核心数大于1（使用的核心数配置可以在工程目录下的<code>menuconfig</code>中配置），那么判断<code>pxCurrentTCB[0]</code>与<code>pxCurrentTCB[1]</code>是否为空，<em><code>pxCurrentTCB</code>是一个拥有两个元素的全局数组，第一个元素保存了core 0 的程序控制块指针，第二个元素保存了core 1的程序控制块指针，也就是说这个数组保存了两个物理核当前运行的任务</em>，如果这两个数组元素为空，说明当前并无任务运行，则把新创建的任务分配给它们，如果都不为空，则对比这两个核当前运行任务的优先级，选一个最小的进行分配，等待下一次调度器开始的时候进行抢占。如果新创建的任务优先级比当前运行的两个任务的优先级还低，则把任务分配到执行创建新任务的CPU上<code>xCoreID = xPortGetCoreID();</code>。这就是内核中对新任务创建时物理核心分配的算法。</p>
-<p>上面这个流程只是对新任务分配了具体的物理核心，但并没有加入到当前任务控制块中，也就是<code>pxCurrentTCB</code>这里，从第42行开始进行分配，先判断分配到的核心上面是否有任务在运行，如果没有，则直接执行<code>pxCurrentTCB[ xCoreID ] = pxNewTCB;</code>把任务挂载到当前程序控制块中，并且判断当前是否是系统上电的第一个任务，如果是第一个任务则初始化所有列表(<code>xDelayedTaskList1</code>,<code>xDelayedTaskList2</code>,<code>xPendingReadyList[]</code>, <code>xSuspendedTaskList</code>)这些列表的作用后面再开一节讲这里先不分析。这样子就可以让两个物理核心共享系统初始化的成果，这也是SMP调度策略里面的一个重要概念。如果当前核心上面有运行的任务也就是<code>pxCurrentTCB[ xCoreID ]</code>不等于<code>NULL</code>,然后判断调度器是否正在运行<code>if( xSchedulerRunning == pdFALSE )</code>，<code>xSchedulerRunning</code>也是一个静态全局变量，用来记录调度器的运行状态，如果调度器没有在运行就安排一个较高优先级的任务给它。最后通过<code>prvAddTaskToReadyList()</code>宏函数加入到<em>就绪任务列表</em>，退出临界区。</p>
-<p>继续判断调度器是否正在运行，如果调度器正在运行，则对比<em>新任务</em>与<em>正在运行的任务</em>的优先级，如果新任务优先级更高，则调用<code>taskYIELD_IF_USING_PREEMPTION()</code>宏函数在当前核心强制进行上下文切换，或者通过<code>taskYIELD_OTHER_CORE()</code>函数发送一个CPU中断给另一个核心找出优先级更高的任务。</p>
-<p>最后总一下上面这个函数如此复杂的逻辑，首先用户手动指定具体的物理核心是优先的，如果没有指定，则临时分配一个，然后再判断调度器是否正在运行，如果不在运行则加入<em>任务就绪列表</em>等待调度器启动，否则对比当前运行任务的优先级决定是否需要抢占。</p>                </article>
-            </aside><!-- /#featured -->
-        <section id="extras" class="body">
-                <div class="blogroll">
-                        <h2>links</h2>
-                        <ul>
-                            <li><a href="http://getpelican.com/">Pelican</a></li>
-                            <li><a href="http://python.org/">Python.org</a></li>
-                            <li><a href="http://jinja.pocoo.org/">Jinja2</a></li>
-                            <li><a href="#">You can modify those links in your config file</a></li>
-                        </ul>
-                </div><!-- /.blogroll -->
-                <div class="social">
-                        <h2>social</h2>
-                        <ul>
-                            <li><a href="/feeds/all.atom.xml" type="application/atom+xml" rel="alternate">atom feed</a></li>
-                            <li><a href="/feeds/all.rss.xml" type="application/rss+xml" rel="alternate">rss feed</a></li>
-
-                            <li><a href="#">You can add links in your config file</a></li>
-                            <li><a href="#">Another social link</a></li>
-                        </ul>
-                </div><!-- /.social -->
-        </section><!-- /#extras -->
-
-        <footer id="contentinfo" class="body">
-                <address id="about" class="vcard body">
-                Proudly powered by <a href="http://getpelican.com/">Pelican</a>, which takes great advantage of <a href="http://python.org">Python</a>.
-                </address><!-- /#about -->
-
-                <p>The theme is by <a href="http://coding.smashingmagazine.com/2009/08/04/designing-a-html-5-layout-from-scratch/">Smashing Magazine</a>, thanks!</p>
-        </footer><!-- /#contentinfo -->
-
-</body>
+    <!-- Le javascript -->
+    <!-- Placed at the end of the document so the pages load faster -->
+    <script src="/theme/js/jquery-1.7.2.min.js"></script>
+    <script src="/theme/js/bootstrap.min.js"></script>
+  </body>
 </html>
