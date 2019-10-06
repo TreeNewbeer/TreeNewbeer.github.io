@@ -1,4 +1,379 @@
 <?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom"><title>TreeNewbeer's blog</title><link href="/" rel="alternate"></link><link href="/feeds/all.atom.xml" rel="self"></link><id>/</id><updated>2019-10-06T00:00:00+08:00</updated><entry><title>ESP-IDF FreeRTOS 任务创建分析</title><link href="/My-first-post.html" rel="alternate"></link><published>2019-10-06T00:00:00+08:00</published><updated>2019-10-06T00:00:00+08:00</updated><author><name>TreeNewbeer</name></author><id>tag:None,2019-10-06:/My-first-post.html</id><summary type="html"></summary><content type="html">&lt;h2&gt;任务创建API&lt;/h2&gt;
+<feed xmlns="http://www.w3.org/2005/Atom"><title>TreeNewbeer's blog</title><link href="/" rel="alternate"></link><link href="/feeds/all.atom.xml" rel="self"></link><id>/</id><updated>2019-10-06T00:00:00+08:00</updated><entry><title>ESP-IDF FreeRTOS 任务创建分析</title><link href="/My-first-post.html" rel="alternate"></link><published>2019-10-06T00:00:00+08:00</published><updated>2019-10-06T00:00:00+08:00</updated><author><name>TreeNewbeer</name></author><id>tag:None,2019-10-06:/My-first-post.html</id><summary type="html"></summary><content type="html">&lt;h1&gt;ESP-IDF FreeRTOS 任务创建分析&lt;/h1&gt;
+&lt;p&gt;标签（空格分隔）： ESP-IDF-FreeRTOS&lt;/p&gt;
 &lt;hr&gt;
-&lt;p&gt;&lt;img alt="pic" src="/pic/2.png"&gt;&lt;/p&gt;</content><category term="FreeRTOS"></category></entry></feed>
+&lt;h2&gt;任务创建API&lt;/h2&gt;
+&lt;hr&gt;
+&lt;p&gt;FreeRTOS的任务创建有两种方式，静态创建与动态创建，这两种方式最大的区别就是静态创建需要在外部传入两个内存块的指针用来存放任务List与任务TCB,因此不可自动回收，而动态创建任务在调用任务删除函数时内存会被系统回收。因此我们在分析FreeRTOS任务创建的相关代码时只需要分析其中一种即可。&lt;/p&gt;
+&lt;p&gt;ESP-IDF版本的FreeRTOS为了能够充分利用ESP32的双核优势，因此把Amazon FreeRTOS扩展了SMP支持，其中大家熟悉的任务创建函数&lt;code&gt;xTaskCreate()&lt;/code&gt;变成了一个“胶水函数”，直接返回&lt;code&gt;xTaskCreatePinnedToCore()&lt;/code&gt;，因此，我们重点分析一下这个函数，首先看一下函数声明：&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;    &lt;span class="n"&gt;BaseType_t&lt;/span&gt; &lt;span class="n"&gt;xTaskCreatePinnedToCore&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;TaskFunction_t&lt;/span&gt; &lt;span class="n"&gt;pxTaskCode&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                                        &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="kt"&gt;char&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="n"&gt;pcName&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                                        &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;usStackDepth&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                                        &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="n"&gt;pvParameters&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                                        &lt;span class="n"&gt;UBaseType_t&lt;/span&gt; &lt;span class="n"&gt;uxPriority&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                                        &lt;span class="n"&gt;TaskHandle_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="n"&gt;pxCreatedTask&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                                        &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="n"&gt;BaseType_t&lt;/span&gt; &lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;这个API的作用是创建一个任务，并且给这个任务指定一个物理核去运行，当&lt;code&gt;xCoreID&lt;/code&gt;的值为&lt;code&gt;tskNO_AFFINITY&lt;/code&gt;时，这个任务就是核心无关的，也就是交给系统自己去决定使用哪一个物理核，并且在任务调度过程中也可以切换物理核去运行。&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;pxTaskCode&lt;/code&gt;：函数指针，指向任务函数入口，任务必须是一个&lt;em&gt;不可返回的函数&lt;/em&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;pcName&lt;/code&gt;：字符串指针，最大长度由&lt;code&gt;configMAX_TASK_NAME_LEN&lt;/code&gt;宏决定，用于调试。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;usStackDepth&lt;/code&gt;：任务堆栈的大小（堆栈深度），这里要注意一下，在Amazon FreeRTOS中单位是&lt;em&gt;word&lt;/em&gt;,因为&lt;code&gt;portSTACK_TYPE&lt;/code&gt;被定义成了&lt;code&gt;uint32_t&lt;/code&gt;类型，而ESP-IDF FreeRTOS是&lt;code&gt;uint8_t&lt;/code&gt;类型的，所以任务堆栈大小的单位是&lt;em&gt;byte&lt;/em&gt;而不是&lt;em&gt;word&lt;/em&gt;。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;pvParameters&lt;/code&gt;：参数指针，在任务创建的时候作为一个参数传递给任务。&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;uxPriority&lt;/code&gt;：任务的优先级，数字越大优先级越高。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pxCreatedTask&lt;/code&gt;：任务句柄，相当于是这个任务的"身份证号码"，后面任务删除等操作一个任务句柄来对任务进行控制。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;xCoreID&lt;/code&gt;：物理核ID，为0时把任务固定在&lt;em&gt;PRO_CPU&lt;/em&gt;上运行，为1时把任务固定在&lt;em&gt;APP_CPU&lt;/em&gt;上运行，一旦固定了某一个CPU，则在任务调度中不可切换物理核心。&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;程序控制块TCB&lt;/h2&gt;
+&lt;hr&gt;
+&lt;p&gt;分析完任务创建API的各个参数含义之后，接下来就是深入分析函数的实现，但在这之前，我想先介绍一个数据结构——任务控制块（TCB），这个数据结构可以说是一个操作系统最为核心的数据结构没有之一，原本这个数据结构使用的名字是&lt;code&gt;tskTCB&lt;/code&gt;,新版的FreeRTOS使用&lt;code&gt;typedef&lt;/code&gt;声明成了&lt;code&gt;TCB_t&lt;/code&gt;，具体从哪个版本开始忘了。结构类型如下：&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;typedef&lt;/span&gt; &lt;span class="k"&gt;struct&lt;/span&gt; &lt;span class="n"&gt;tskTaskControlBlock&lt;/span&gt;
+&lt;span class="p"&gt;{&lt;/span&gt;
+    &lt;span class="k"&gt;volatile&lt;/span&gt; &lt;span class="n"&gt;StackType_t&lt;/span&gt;    &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pxTopOfStack&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="cp"&gt;#if ( portUSING_MPU_WRAPPERS == 1 )&lt;/span&gt;
+        &lt;span class="n"&gt;xMPU_SETTINGS&lt;/span&gt;   &lt;span class="n"&gt;xMPUSettings&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="cp"&gt;#endif&lt;/span&gt;
+
+    &lt;span class="n"&gt;ListItem_t&lt;/span&gt;          &lt;span class="n"&gt;xGenericListItem&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="n"&gt;ListItem_t&lt;/span&gt;          &lt;span class="n"&gt;xEventListItem&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="n"&gt;UBaseType_t&lt;/span&gt;         &lt;span class="n"&gt;uxPriority&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="n"&gt;StackType_t&lt;/span&gt;         &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pxStack&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="kt"&gt;char&lt;/span&gt;                &lt;span class="n"&gt;pcTaskName&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt; &lt;span class="n"&gt;configMAX_TASK_NAME_LEN&lt;/span&gt; &lt;span class="p"&gt;];&lt;/span&gt;
+    &lt;span class="n"&gt;BaseType_t&lt;/span&gt;          &lt;span class="n"&gt;xCoreID&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="cp"&gt;#if ( portSTACK_GROWTH &amp;gt; 0 || configENABLE_TASK_SNAPSHOT == 1 )&lt;/span&gt;
+        &lt;span class="n"&gt;StackType_t&lt;/span&gt;     &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pxEndOfStack&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="cp"&gt;#endif&lt;/span&gt;
+
+    &lt;span class="cp"&gt;#if ( portCRITICAL_NESTING_IN_TCB == 1 )&lt;/span&gt;
+        &lt;span class="n"&gt;UBaseType_t&lt;/span&gt;     &lt;span class="n"&gt;uxCriticalNesting&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+        &lt;span class="kt"&gt;uint32_t&lt;/span&gt;        &lt;span class="n"&gt;uxOldInterruptState&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="cp"&gt;#endif&lt;/span&gt;
+
+    &lt;span class="cp"&gt;#if ( configUSE_TRACE_FACILITY == 1 )&lt;/span&gt;
+        &lt;span class="n"&gt;UBaseType_t&lt;/span&gt;     &lt;span class="n"&gt;uxTCBNumber&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+        &lt;span class="n"&gt;UBaseType_t&lt;/span&gt;     &lt;span class="n"&gt;uxTaskNumber&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="cp"&gt;#endif&lt;/span&gt;
+
+    &lt;span class="cp"&gt;#if ( configUSE_MUTEXES == 1 )&lt;/span&gt;
+        &lt;span class="n"&gt;UBaseType_t&lt;/span&gt;     &lt;span class="n"&gt;uxBasePriority&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt; 
+        &lt;span class="n"&gt;UBaseType_t&lt;/span&gt;     &lt;span class="n"&gt;uxMutexesHeld&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="cp"&gt;#endif&lt;/span&gt;
+
+    &lt;span class="cp"&gt;#if ( configUSE_APPLICATION_TASK_TAG == 1 )&lt;/span&gt;
+        &lt;span class="n"&gt;TaskHookFunction_t&lt;/span&gt; &lt;span class="n"&gt;pxTaskTag&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="cp"&gt;#endif&lt;/span&gt;
+
+    &lt;span class="cp"&gt;#if( configNUM_THREAD_LOCAL_STORAGE_POINTERS &amp;gt; 0 )&lt;/span&gt;
+        &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pvThreadLocalStoragePointers&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt; &lt;span class="n"&gt;configNUM_THREAD_LOCAL_STORAGE_POINTERS&lt;/span&gt; &lt;span class="p"&gt;];&lt;/span&gt;
+        &lt;span class="cp"&gt;#if ( configTHREAD_LOCAL_STORAGE_DELETE_CALLBACKS )&lt;/span&gt;
+            &lt;span class="n"&gt;TlsDeleteCallbackFunction_t&lt;/span&gt; &lt;span class="n"&gt;pvThreadLocalStoragePointersDelCallback&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt; &lt;span class="n"&gt;configNUM_THREAD_LOCAL_STORAGE_POINTERS&lt;/span&gt; &lt;span class="p"&gt;];&lt;/span&gt;
+        &lt;span class="cp"&gt;#endif&lt;/span&gt;
+    &lt;span class="cp"&gt;#endif&lt;/span&gt;
+
+    &lt;span class="cp"&gt;#if ( configGENERATE_RUN_TIME_STATS == 1 )&lt;/span&gt;
+        &lt;span class="kt"&gt;uint32_t&lt;/span&gt;        &lt;span class="n"&gt;ulRunTimeCounter&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="cp"&gt;#endif&lt;/span&gt;
+
+    &lt;span class="cp"&gt;#if ( configUSE_NEWLIB_REENTRANT == 1 )&lt;/span&gt;
+        &lt;span class="k"&gt;struct&lt;/span&gt;  &lt;span class="n"&gt;_reent&lt;/span&gt; &lt;span class="n"&gt;xNewLib_reent&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="cp"&gt;#endif&lt;/span&gt;
+
+    &lt;span class="cp"&gt;#if ( configUSE_TASK_NOTIFICATIONS == 1 )&lt;/span&gt;
+        &lt;span class="k"&gt;volatile&lt;/span&gt; &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;ulNotifiedValue&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+        &lt;span class="k"&gt;volatile&lt;/span&gt; &lt;span class="n"&gt;eNotifyValue&lt;/span&gt; &lt;span class="n"&gt;eNotifyState&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="cp"&gt;#endif&lt;/span&gt;
+    &lt;span class="cp"&gt;#if( tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE != 0 )&lt;/span&gt;
+        &lt;span class="kt"&gt;uint8_t&lt;/span&gt; &lt;span class="n"&gt;ucStaticallyAllocated&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt; 
+    &lt;span class="err"&gt;#&lt;/span&gt;&lt;span class="n"&gt;endif&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt; &lt;span class="n"&gt;tskTCB&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;这个数据结构有点长而且注释也多，为了方便查看我把注释删掉了而且重新排版了一下，下面详细介绍一下这些成员(由于成员实在是太多了，篇幅有限，我只详细描述一下和本文主题有关的，其他的留在后面的文章介绍)：&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;pxTopOfStack&lt;/code&gt;：堆栈栈顶指针，永远指向最后一个入栈的元素。&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;xGenericListItem&lt;/code&gt;：状态列表项，通过这个列表项的pcContainer成员来判断当前列表项属于哪一个List(Ready, Blocked, Suspended )从而确定当前task的状态&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;xEventListItem&lt;/code&gt;：时间列表项，在事件列表中按照优先级降序排列&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;uxPriority&lt;/code&gt;：任务优先级，从0开始，数字越大优先级越高&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pxStack&lt;/code&gt;：堆栈指针，指向任务堆栈的起始地址&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;pcTaskName&lt;/code&gt;：字符串数组，用来保存任务名字&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;xCoreID&lt;/code&gt;：物理核ID，记录当前task所在的物理核&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;与任务创建有关的数据结构解释完了，接下来直接进入&lt;code&gt;xTaskCreatePinnedToCore()&lt;/code&gt;函数内部：&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;    &lt;span class="n"&gt;TCB_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="n"&gt;BaseType_t&lt;/span&gt; &lt;span class="n"&gt;xReturn&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+
+    &lt;span class="n"&gt;StackType_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pxStack&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+
+    &lt;span class="cm"&gt;/* Allocate space for the stack used by the task being created. */&lt;/span&gt;
+    &lt;span class="n"&gt;pxStack&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;StackType_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;pvPortMallocStackMem&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="kt"&gt;size_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;usStackDepth&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="k"&gt;sizeof&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;StackType_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+
+    &lt;span class="k"&gt;if&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxStack&lt;/span&gt; &lt;span class="o"&gt;!=&lt;/span&gt; &lt;span class="nb"&gt;NULL&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="cm"&gt;/* Allocate space for the TCB. */&lt;/span&gt;
+        &lt;span class="n"&gt;pxNewTCB&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;TCB_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;pvPortMallocTcbMem&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="k"&gt;sizeof&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;TCB_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt; 
+        &lt;span class="k"&gt;if&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt; &lt;span class="o"&gt;!=&lt;/span&gt; &lt;span class="nb"&gt;NULL&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="p"&gt;{&lt;/span&gt;
+            &lt;span class="cm"&gt;/* Store the stack location in the TCB. */&lt;/span&gt;
+            &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;pxStack&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pxStack&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="k"&gt;else&lt;/span&gt;
+        &lt;span class="p"&gt;{&lt;/span&gt;
+            &lt;span class="cm"&gt;/* The stack cannot be used as the TCB was not created.  Free it again. */&lt;/span&gt;
+            &lt;span class="n"&gt;vPortFree&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxStack&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+    &lt;span class="p"&gt;}&lt;/span&gt;
+    &lt;span class="k"&gt;else&lt;/span&gt;
+    &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;pxNewTCB&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="nb"&gt;NULL&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="p"&gt;}&lt;/span&gt;
+
+    &lt;span class="k"&gt;if&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt; &lt;span class="o"&gt;!=&lt;/span&gt; &lt;span class="nb"&gt;NULL&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="cp"&gt;#if( tskSTATIC_AND_DYNAMIC_ALLOCATION_POSSIBLE != 0 )&lt;/span&gt;
+        &lt;span class="p"&gt;{&lt;/span&gt;
+            &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;ucStaticallyAllocated&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;tskDYNAMICALLY_ALLOCATED_STACK_AND_TCB&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="cp"&gt;#endif &lt;/span&gt;&lt;span class="cm"&gt;/* configSUPPORT_STATIC_ALLOCATION */&lt;/span&gt;&lt;span class="cp"&gt;&lt;/span&gt;
+
+        &lt;span class="n"&gt;prvInitialiseNewTask&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxTaskCode&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;pcName&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;usStackDepth&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;pvParameters&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;uxPriority&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;pxCreatedTask&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="nb"&gt;NULL&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+        &lt;span class="n"&gt;prvAddNewTaskToReadyList&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;pxTaskCode&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+        &lt;span class="n"&gt;xReturn&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pdPASS&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="p"&gt;}&lt;/span&gt;
+    &lt;span class="k"&gt;else&lt;/span&gt;
+    &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;xReturn&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="p"&gt;}&lt;/span&gt;
+    &lt;span class="k"&gt;return&lt;/span&gt; &lt;span class="n"&gt;xReturn&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;(代码为了方便观察，我删掉了一个条件编译宏&lt;code&gt;portSTACK_GROWTH&lt;/code&gt;的那一部分并重新排版了一下，这个是选择堆栈增长方向的，并不会影响我们的研究。)
+首先看到前半部分（Line 1-28）在分配任务堆栈与程序控制块的内存，分配结束后内存空间大概类似下图：
+&lt;img alt="Selection_008.png-9.8kB" src="http://static.zybuluo.com/TreeNewbee/vhipp6biifsm67ldjc2iofi7/Selection_008.png"&gt;&lt;/p&gt;
+&lt;h2&gt;初始化任务列表与列表项&lt;/h2&gt;
+&lt;hr&gt;
+&lt;p&gt;然后查看剩余部分中出现的两个函数：&lt;code&gt;prvInitialiseNewTask()&lt;/code&gt; &lt;code&gt;prvAddNewTaskToReadyList()&lt;/code&gt;，这两个函数的作用是初始化TCB中的成员并且把任务加入到&lt;em&gt;就绪任务列表&lt;/em&gt;，然后完成了一次任务创建的整个流程。现在我们继续深入分析这两个函数具体做了啥。首先看一下&lt;code&gt;prvInitialiseNewTask()&lt;/code&gt;的源码：&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="nf"&gt;prvInitialiseNewTask&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;   &lt;span class="n"&gt;TaskFunction_t&lt;/span&gt; &lt;span class="n"&gt;pxTaskCode&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                                    &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="kt"&gt;char&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="n"&gt;pcName&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                                    &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="n"&gt;ulStackDepth&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                                    &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="n"&gt;pvParameters&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                                    &lt;span class="n"&gt;UBaseType_t&lt;/span&gt; &lt;span class="n"&gt;uxPriority&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                                    &lt;span class="n"&gt;TaskHandle_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="n"&gt;pxCreatedTask&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                                    &lt;span class="n"&gt;TCB_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt;
+                                    &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="n"&gt;MemoryRegion_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="n"&gt;xRegions&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="k"&gt;const&lt;/span&gt; &lt;span class="n"&gt;BaseType_t&lt;/span&gt; &lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="p"&gt;{&lt;/span&gt;
+    &lt;span class="n"&gt;StackType_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pxTopOfStack&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="n"&gt;UBaseType_t&lt;/span&gt; &lt;span class="n"&gt;x&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+
+    &lt;span class="cp"&gt;#if( ( configCHECK_FOR_STACK_OVERFLOW &amp;gt; 1 ) || ( configUSE_TRACE_FACILITY == 1 ) || ( INCLUDE_uxTaskGetStackHighWaterMark == 1 ) )&lt;/span&gt;
+    &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;memset&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;pxStack&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="kt"&gt;int&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;tskSTACK_FILL_BYTE&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="kt"&gt;size_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;ulStackDepth&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="k"&gt;sizeof&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;StackType_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="p"&gt;}&lt;/span&gt;
+    &lt;span class="cp"&gt;#endif&lt;/span&gt;
+
+    &lt;span class="n"&gt;pxTopOfStack&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;pxStack&lt;/span&gt; &lt;span class="o"&gt;+&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;ulStackDepth&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="kt"&gt;uint32_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+
+    &lt;span class="n"&gt;pxTopOfStack&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;StackType_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;portPOINTER_SIZE_TYPE&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;pxTopOfStack&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt; 
+                                     &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="o"&gt;~&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;portPOINTER_SIZE_TYPE&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;portBYTE_ALIGNMENT_MASK&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+
+    &lt;span class="n"&gt;configASSERT&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;portPOINTER_SIZE_TYPE&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;pxTopOfStack&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;portPOINTER_SIZE_TYPE&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;portBYTE_ALIGNMENT_MASK&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="mi"&gt;0UL&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;pxEndOfStack&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pxTopOfStack&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+
+    &lt;span class="k"&gt;for&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;UBaseType_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;UBaseType_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;configMAX_TASK_NAME_LEN&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt; &lt;span class="n"&gt;x&lt;/span&gt;&lt;span class="o"&gt;++&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;pcTaskName&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt; &lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pcName&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt; &lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="p"&gt;];&lt;/span&gt;
+
+        &lt;span class="k"&gt;if&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pcName&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt; &lt;span class="n"&gt;x&lt;/span&gt; &lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="mh"&gt;0x00&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="p"&gt;{&lt;/span&gt;
+            &lt;span class="k"&gt;break&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="k"&gt;else&lt;/span&gt;
+        &lt;span class="p"&gt;{&lt;/span&gt;
+            &lt;span class="n"&gt;mtCOVERAGE_TEST_MARKER&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+    &lt;span class="p"&gt;}&lt;/span&gt;
+
+    &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;pcTaskName&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt; &lt;span class="n"&gt;configMAX_TASK_NAME_LEN&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt; &lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="sc"&gt;&amp;#39;\0&amp;#39;&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+
+    &lt;span class="k"&gt;if&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;uxPriority&lt;/span&gt; &lt;span class="o"&gt;&amp;gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;UBaseType_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;configMAX_PRIORITIES&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;uxPriority&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;UBaseType_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;configMAX_PRIORITIES&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;UBaseType_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="mi"&gt;1U&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="p"&gt;}&lt;/span&gt;
+    &lt;span class="k"&gt;else&lt;/span&gt;
+    &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;mtCOVERAGE_TEST_MARKER&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;
+    &lt;span class="p"&gt;}&lt;/span&gt;
+
+    &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;uxPriority&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;uxPriority&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;xCoreID&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="cp"&gt;#if ( configUSE_MUTEXES == 1 )&lt;/span&gt;
+    &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;uxBasePriority&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;uxPriority&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+        &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;uxMutexesHeld&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="p"&gt;}&lt;/span&gt;
+    &lt;span class="cp"&gt;#endif &lt;/span&gt;&lt;span class="cm"&gt;/* configUSE_MUTEXES */&lt;/span&gt;&lt;span class="cp"&gt;&lt;/span&gt;
+
+    &lt;span class="n"&gt;vListInitialiseItem&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;xGenericListItem&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="n"&gt;vListInitialiseItem&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;xEventListItem&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="n"&gt;listSET_LIST_ITEM_OWNER&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;xGenericListItem&lt;/span&gt; &lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="n"&gt;listSET_LIST_ITEM_VALUE&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;xEventListItem&lt;/span&gt; &lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;TickType_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;configMAX_PRIORITIES&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;TickType_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;uxPriority&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="n"&gt;listSET_LIST_ITEM_OWNER&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;xEventListItem&lt;/span&gt; &lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+
+    &lt;span class="k"&gt;if&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;pxCreatedTask&lt;/span&gt; &lt;span class="o"&gt;!=&lt;/span&gt; &lt;span class="nb"&gt;NULL&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pxCreatedTask&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;TaskHandle_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+    &lt;span class="p"&gt;}&lt;/span&gt;
+    &lt;span class="k"&gt;else&lt;/span&gt;
+    &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;mtCOVERAGE_TEST_MARKER&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;
+    &lt;span class="p"&gt;}&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;由于这个函数实在是太长了，我只保留与本文有关的部分以及默认开启的宏。这个函数的主要作用是初始化新任务。&lt;/p&gt;
+&lt;p&gt;首先前面部分使用&lt;code&gt;tskSTACK_FILL_BYTE&lt;/code&gt;(0xa5)填充任务堆栈，用来检测堆栈溢出，然后计算栈顶、栈底两个指针的位置，栈底指针只有在地址向下增长时才起作用。然后拷贝任务名字并末尾补充一个&lt;code&gt;\0&lt;/code&gt;，限制优先级在&lt;code&gt;configMAX_PRIORITIES - 1&lt;/code&gt;之内，设置coreid。重点在下面几行初始化列表与列表项的代码：&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;    &lt;span class="n"&gt;vListInitialiseItem&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;xGenericListItem&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="n"&gt;vListInitialiseItem&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;xEventListItem&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="n"&gt;listSET_LIST_ITEM_OWNER&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;xGenericListItem&lt;/span&gt; &lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="n"&gt;listSET_LIST_ITEM_VALUE&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;xEventListItem&lt;/span&gt; &lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;TickType_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;configMAX_PRIORITIES&lt;/span&gt; &lt;span class="o"&gt;-&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;TickType_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="n"&gt;uxPriority&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="n"&gt;listSET_LIST_ITEM_OWNER&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;xEventListItem&lt;/span&gt; &lt;span class="p"&gt;),&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;这几个API我在上一篇介绍列表与列表项&lt;a href="https://www.cnblogs.com/SexyBoyHub/articles/11502483.html"&gt;列表与列表项&lt;/a&gt;的文章里面分析过，此处不再啰嗦。首先初始化状态列表项与事件列表项，然后把TCB又重新挂接在了两个列表项的&lt;code&gt;pvOwner&lt;/code&gt;里面了，这样子我们就可以通过列表项来访问程序控制块，然后把任务&lt;em&gt;优先级的补数&lt;/em&gt;保存在事件列表项里面（之前讲解列表项的时候也提到过）。那么进行了这一系列操作之后，新任务TCB的结构就会如下图所示那样子：
+&lt;img alt="Selection_009.png-48.5kB" src="http://static.zybuluo.com/TreeNewbee/8uvopzsk1fjhrs42uwwrja8t/Selection_009.png"&gt;&lt;/p&gt;
+&lt;h2&gt;分配物理核心并加入就绪列表&lt;/h2&gt;
+&lt;hr&gt;
+&lt;p&gt;接着分析一下&lt;code&gt;prvAddNewTaskToReadyList()&lt;/code&gt;函数的源码：&lt;/p&gt;
+&lt;div class="highlight"&gt;&lt;pre&gt;&lt;span&gt;&lt;/span&gt;&lt;span class="k"&gt;static&lt;/span&gt; &lt;span class="kt"&gt;void&lt;/span&gt; &lt;span class="nf"&gt;prvAddNewTaskToReadyList&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;TCB_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;TaskFunction_t&lt;/span&gt; &lt;span class="n"&gt;pxTaskCode&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;BaseType_t&lt;/span&gt; &lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+&lt;span class="p"&gt;{&lt;/span&gt;
+    &lt;span class="n"&gt;TCB_t&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;curTCB&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;tcb0&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="o"&gt;*&lt;/span&gt;&lt;span class="n"&gt;tcb1&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+
+    &lt;span class="n"&gt;taskENTER_CRITICAL&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;xTaskQueueMutex&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;uxCurrentNumberOfTasks&lt;/span&gt;&lt;span class="o"&gt;++&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+
+        &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;tskNO_AFFINITY&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="p"&gt;{&lt;/span&gt;
+            &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;portNUM_PROCESSORS&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+            &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+            &lt;span class="p"&gt;}&lt;/span&gt;
+            &lt;span class="k"&gt;else&lt;/span&gt;
+            &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="n"&gt;tcb0&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pxCurrentTCB&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;];&lt;/span&gt;
+                &lt;span class="n"&gt;tcb1&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pxCurrentTCB&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;];&lt;/span&gt;
+                &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;tcb0&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="nb"&gt;NULL&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="p"&gt;{&lt;/span&gt;
+                    &lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+                &lt;span class="p"&gt;}&lt;/span&gt;
+                &lt;span class="k"&gt;else&lt;/span&gt; &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;tcb1&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="nb"&gt;NULL&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="p"&gt;{&lt;/span&gt;
+                    &lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+                &lt;span class="p"&gt;}&lt;/span&gt;
+                &lt;span class="k"&gt;else&lt;/span&gt; &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;tcb0&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;uxPriority&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;uxPriority&lt;/span&gt; &lt;span class="o"&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span class="n"&gt;tcb0&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;uxPriority&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;tcb1&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;uxPriority&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="p"&gt;{&lt;/span&gt;
+                    &lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+                &lt;span class="p"&gt;}&lt;/span&gt;
+                &lt;span class="k"&gt;else&lt;/span&gt; &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;tcb1&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;uxPriority&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;uxPriority&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="p"&gt;{&lt;/span&gt;
+                    &lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+                &lt;span class="p"&gt;}&lt;/span&gt;
+                &lt;span class="k"&gt;else&lt;/span&gt;
+                &lt;span class="p"&gt;{&lt;/span&gt;
+                    &lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;xPortGetCoreID&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt; &lt;span class="c1"&gt;// Both CPU have higher priority tasks running on them, so this won&amp;#39;t run yet&lt;/span&gt;
+                &lt;span class="p"&gt;}&lt;/span&gt;
+            &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+
+        &lt;span class="k"&gt;if&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxCurrentTCB&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt; &lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="nb"&gt;NULL&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="p"&gt;{&lt;/span&gt;
+            &lt;span class="n"&gt;pxCurrentTCB&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt; &lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+
+            &lt;span class="k"&gt;if&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;uxCurrentNumberOfTasks&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;UBaseType_t&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="mi"&gt;1&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+            &lt;span class="p"&gt;{&lt;/span&gt;
+            &lt;span class="cp"&gt;#if portFIRST_TASK_HOOK&lt;/span&gt;
+                &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;xPortGetCoreID&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="mi"&gt;0&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                    &lt;span class="n"&gt;vPortFirstTaskHook&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;pxTaskCode&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
+                &lt;span class="p"&gt;}&lt;/span&gt;
+            &lt;span class="cp"&gt;#endif &lt;/span&gt;&lt;span class="cm"&gt;/* configFIRST_TASK_HOOK */&lt;/span&gt;&lt;span class="cp"&gt;&lt;/span&gt;
+                &lt;span class="n"&gt;prvInitialiseTaskLists&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;
+            &lt;span class="p"&gt;}&lt;/span&gt;
+            &lt;span class="k"&gt;else&lt;/span&gt;
+            &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="n"&gt;mtCOVERAGE_TEST_MARKER&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;
+            &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="k"&gt;else&lt;/span&gt;
+        &lt;span class="p"&gt;{&lt;/span&gt;
+            &lt;span class="k"&gt;if&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;xSchedulerRunning&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;pdFALSE&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+            &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="k"&gt;if&lt;/span&gt; &lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxCurrentTCB&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;xCoreID&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="nb"&gt;NULL&lt;/span&gt; &lt;span class="o"&gt;||&lt;/span&gt; &lt;span class="n"&gt;pxCurrentTCB&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;xCoreID&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;uxPriority&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;=&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;uxPriority&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+                &lt;span class="p"&gt;{&lt;/span&gt;
+                    &lt;span class="n"&gt;pxCurrentTCB&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt;&lt;span class="n"&gt;xCoreID&lt;/span&gt;&lt;span class="p"&gt;]&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+                &lt;span class="p"&gt;}&lt;/span&gt;
+            &lt;span class="p"&gt;}&lt;/span&gt;
+            &lt;span class="k"&gt;else&lt;/span&gt;
+            &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="n"&gt;mtCOVERAGE_TEST_MARKER&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;
+            &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+
+        &lt;span class="n"&gt;uxTaskNumber&lt;/span&gt;&lt;span class="o"&gt;++&lt;/span&gt;&lt;span class="p"&gt;;&lt;/span&gt;
+
+        &lt;span class="n"&gt;traceTASK_CREATE&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+
+        &lt;span class="n"&gt;prvAddTaskToReadyList&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+
+        &lt;span class="n"&gt;portSETUP_TCB&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt; &lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="p"&gt;}&lt;/span&gt;
+
+    &lt;span class="n"&gt;taskEXIT_CRITICAL&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;xTaskQueueMutex&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
+
+    &lt;span class="k"&gt;if&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;xSchedulerRunning&lt;/span&gt; &lt;span class="o"&gt;!=&lt;/span&gt; &lt;span class="n"&gt;pdFALSE&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+    &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;taskENTER_CRITICAL&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;xTaskQueueMutex&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
+
+        &lt;span class="n"&gt;curTCB&lt;/span&gt; &lt;span class="o"&gt;=&lt;/span&gt; &lt;span class="n"&gt;pxCurrentTCB&lt;/span&gt;&lt;span class="p"&gt;[&lt;/span&gt; &lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="p"&gt;];&lt;/span&gt;
+
+        &lt;span class="k"&gt;if&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;curTCB&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="nb"&gt;NULL&lt;/span&gt; &lt;span class="o"&gt;||&lt;/span&gt; &lt;span class="n"&gt;curTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;uxPriority&lt;/span&gt; &lt;span class="o"&gt;&amp;lt;&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;uxPriority&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+        &lt;span class="p"&gt;{&lt;/span&gt;
+            &lt;span class="k"&gt;if&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt; &lt;span class="n"&gt;xCoreID&lt;/span&gt; &lt;span class="o"&gt;==&lt;/span&gt; &lt;span class="n"&gt;xPortGetCoreID&lt;/span&gt;&lt;span class="p"&gt;()&lt;/span&gt; &lt;span class="p"&gt;)&lt;/span&gt;
+            &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="n"&gt;taskYIELD_IF_USING_PREEMPTION&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;
+            &lt;span class="p"&gt;}&lt;/span&gt;
+            &lt;span class="k"&gt;else&lt;/span&gt; &lt;span class="p"&gt;{&lt;/span&gt;
+                &lt;span class="n"&gt;taskYIELD_OTHER_CORE&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="n"&gt;xCoreID&lt;/span&gt;&lt;span class="p"&gt;,&lt;/span&gt; &lt;span class="n"&gt;pxNewTCB&lt;/span&gt;&lt;span class="o"&gt;-&amp;gt;&lt;/span&gt;&lt;span class="n"&gt;uxPriority&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
+            &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="k"&gt;else&lt;/span&gt;
+        &lt;span class="p"&gt;{&lt;/span&gt;
+            &lt;span class="n"&gt;mtCOVERAGE_TEST_MARKER&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;
+        &lt;span class="p"&gt;}&lt;/span&gt;
+        &lt;span class="n"&gt;taskEXIT_CRITICAL&lt;/span&gt;&lt;span class="p"&gt;(&lt;/span&gt;&lt;span class="o"&gt;&amp;amp;&lt;/span&gt;&lt;span class="n"&gt;xTaskQueueMutex&lt;/span&gt;&lt;span class="p"&gt;);&lt;/span&gt;
+    &lt;span class="p"&gt;}&lt;/span&gt;
+    &lt;span class="k"&gt;else&lt;/span&gt;
+    &lt;span class="p"&gt;{&lt;/span&gt;
+        &lt;span class="n"&gt;mtCOVERAGE_TEST_MARKER&lt;/span&gt;&lt;span class="p"&gt;();&lt;/span&gt;
+    &lt;span class="p"&gt;}&lt;/span&gt;
+&lt;span class="p"&gt;}&lt;/span&gt;
+&lt;/pre&gt;&lt;/div&gt;
+
+
+&lt;p&gt;删掉了断言和一些追踪调试的宏后依然很长。这个函数的作用是把初始化完毕的新任务加入到&lt;em&gt;就绪任务列表&lt;/em&gt;中。这个函数直接决定了任务在创建时运行在具体的哪一个物理核。&lt;/p&gt;
+&lt;p&gt;首先进入临界区，（这个带全局任务队列锁的临界区API先不分析，后面再开一贴讲，关乎一些SMP调度特性，这也是ESP-IDF FreeRTOS与Amazon FreeRTOS的一个区别比较大的地方。现在只需要知道这里需要禁止上下文切换就够了）&lt;code&gt;uxCurrentNumberOfTasks&lt;/code&gt;加一，这是一个静态全局变量，用来记录当前任务数，然后进入if语句判断&lt;code&gt;xCoreID&lt;/code&gt;是否为&lt;code&gt;tskNO_AFFINITY&lt;/code&gt;(Line 9-40)，如果在创建任务时指定了物理核ID为&lt;code&gt;tskNO_AFFINITY&lt;/code&gt;也就是&lt;em&gt;核心无关&lt;/em&gt;并且在移植层定义了使用的核心数大于1（使用的核心数配置可以在工程目录下的&lt;code&gt;menuconfig&lt;/code&gt;中配置），那么判断&lt;code&gt;pxCurrentTCB[0]&lt;/code&gt;与&lt;code&gt;pxCurrentTCB[1]&lt;/code&gt;是否为空，&lt;em&gt;&lt;code&gt;pxCurrentTCB&lt;/code&gt;是一个拥有两个元素的全局数组，第一个元素保存了core 0 的程序控制块指针，第二个元素保存了core 1的程序控制块指针，也就是说这个数组保存了两个物理核当前运行的任务&lt;/em&gt;，如果这两个数组元素为空，说明当前并无任务运行，则把新创建的任务分配给它们，如果都不为空，则对比这两个核当前运行任务的优先级，选一个最小的进行分配，等待下一次调度器开始的时候进行抢占。如果新创建的任务优先级比当前运行的两个任务的优先级还低，则把任务分配到执行创建新任务的CPU上&lt;code&gt;xCoreID = xPortGetCoreID();&lt;/code&gt;。这就是内核中对新任务创建时物理核心分配的算法。&lt;/p&gt;
+&lt;p&gt;上面这个流程只是对新任务分配了具体的物理核心，但并没有加入到当前任务控制块中，也就是&lt;code&gt;pxCurrentTCB&lt;/code&gt;这里，从第42行开始进行分配，先判断分配到的核心上面是否有任务在运行，如果没有，则直接执行&lt;code&gt;pxCurrentTCB[ xCoreID ] = pxNewTCB;&lt;/code&gt;把任务挂载到当前程序控制块中，并且判断当前是否是系统上电的第一个任务，如果是第一个任务则初始化所有列表(&lt;code&gt;xDelayedTaskList1&lt;/code&gt;,&lt;code&gt;xDelayedTaskList2&lt;/code&gt;,&lt;code&gt;xPendingReadyList[]&lt;/code&gt;, &lt;code&gt;xSuspendedTaskList&lt;/code&gt;)这些列表的作用后面再开一节讲这里先不分析。这样子就可以让两个物理核心共享系统初始化的成果，这也是SMP调度策略里面的一个重要概念。如果当前核心上面有运行的任务也就是&lt;code&gt;pxCurrentTCB[ xCoreID ]&lt;/code&gt;不等于&lt;code&gt;NULL&lt;/code&gt;,然后判断调度器是否正在运行&lt;code&gt;if( xSchedulerRunning == pdFALSE )&lt;/code&gt;，&lt;code&gt;xSchedulerRunning&lt;/code&gt;也是一个静态全局变量，用来记录调度器的运行状态，如果调度器没有在运行就安排一个较高优先级的任务给它。最后通过&lt;code&gt;prvAddTaskToReadyList()&lt;/code&gt;宏函数加入到&lt;em&gt;就绪任务列表&lt;/em&gt;，退出临界区。&lt;/p&gt;
+&lt;p&gt;继续判断调度器是否正在运行，如果调度器正在运行，则对比&lt;em&gt;新任务&lt;/em&gt;与&lt;em&gt;正在运行的任务&lt;/em&gt;的优先级，如果新任务优先级更高，则调用&lt;code&gt;taskYIELD_IF_USING_PREEMPTION()&lt;/code&gt;宏函数在当前核心强制进行上下文切换，或者通过&lt;code&gt;taskYIELD_OTHER_CORE()&lt;/code&gt;函数发送一个CPU中断给另一个核心找出优先级更高的任务。&lt;/p&gt;
+&lt;p&gt;最后总一下上面这个函数如此复杂的逻辑，首先用户手动指定具体的物理核心是优先的，如果没有指定，则临时分配一个，然后再判断调度器是否正在运行，如果不在运行则加入&lt;em&gt;任务就绪列表&lt;/em&gt;等待调度器启动，否则对比当前运行任务的优先级决定是否需要抢占。&lt;/p&gt;</content><category term="FreeRTOS"></category></entry></feed>
