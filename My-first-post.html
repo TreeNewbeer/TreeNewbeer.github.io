@@ -1,115 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>ESP-IDF FreeRTOS 任务创建分析 | TreeNewbeer's blog</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="keywords" content="" />
-    <meta name="author" content="TreeNewbeer" />
-    <meta name="kittycheck_rumble" content="true" />
-    <meta name="kittycheck_position" content="top=60,right=60" />
+<head>
+        <meta charset="utf-8" />
+        <title>ESP-IDF FreeRTOS 任务创建分析</title>
+        <link rel="stylesheet" href="/theme/css/main.css" />
+        <link href="/feeds/all.atom.xml" type="application/atom+xml" rel="alternate" title="TreeNewbeer's blog Atom Feed" />
+        <link href="/feeds/all.rss.xml" type="application/rss+xml" rel="alternate" title="TreeNewbeer's blog RSS Feed" />
+</head>
 
-    <!-- Le styles -->
-    <link rel="stylesheet" href="/theme/css/bootstrap.min.css" type="text/css" />
-    <style type="text/css">
-      body {
-        padding-top: 60px;
-        padding-bottom: 40px;
-      }
-      .sidebar-nav {
-        padding: 9px 0;
-      }
-      .tag-1 {
-        font-size: 13pt;
-      }
-      .tag-2 {
-        font-size: 10pt;
-      }
-      .tag-2 {
-        font-size: 8pt;
-      }
-      .tag-4 {
-        font-size: 6pt;
-     }
-    </style>
-    <link href="/theme/css/bootstrap-responsive.min.css" rel="stylesheet">
-    <link href="/theme/css/font-awesome.css" rel="stylesheet">
-    <link href="/theme/css/pygments.css" rel="stylesheet">
+<body id="index" class="home">
+        <header id="banner" class="body">
+                <h1><a href="/">TreeNewbeer's blog </a></h1>
+                <nav><ul>
+                    <li class="active"><a href="/category/os.html">OS</a></li>
+                </ul></nav>
+        </header><!-- /#banner -->
+<section id="content" class="body">
+  <article>
+    <header>
+      <h1 class="entry-title">
+        <a href="/My-first-post.html" rel="bookmark"
+           title="Permalink to ESP-IDF FreeRTOS 任务创建分析">ESP-IDF FreeRTOS 任务创建分析</a></h1>
+    </header>
 
-    <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
-    <!--[if lt IE 9]>
-      <script src="//html5shim.googlecode.com/svn/trunk/html5.js"></script>
-    <![endif]-->
-
-    <!-- Le fav and touch icons -->
-    <link rel="shortcut icon" href="/theme/img/favicon.ico">
-    <link rel="apple-touch-icon" href="/theme/img/apple-touch-icon.png">
-    <link rel="apple-touch-icon" sizes="72x72" href="/theme/img/apple-touch-icon-72x72.png">
-    <link rel="apple-touch-icon" sizes="114x114" href="/theme/img/apple-touch-icon-114x114.png">
-
-    <link href="/" type="application/atom+xml" rel="alternate" title="TreeNewbeer's blog ATOM Feed" />
-  </head>
-  <body>
-    <div class="navbar navbar-fixed-top">
-      <div class="navbar-inner">
-        <div class="container-fluid">
-          <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
-            <span class="icon-bar"></span>
-            <span class="icon-bar"></span>
-            <span class="icon-bar"></span>
-          </a>
-          <a class="brand" href="/index.html">TreeNewbeer's blog </a>
-          <div class="nav-collapse">
-            <ul class="nav">
-                <li class="divider-vertical"></li>
-                <li class="active">
-                  <a href="/category/os.html">
-						        <i class="icon-folder-open icon-large"></i>OS
-					         </a>
-                </li>
-              <ul class="nav pull-right">
-                    <li><a href="/"><i class="icon-th-list"></i>Archives</a></li>
-              </ul>
-
-            </ul>
-            <!--<p class="navbar-text pull-right">Logged in as <a href="#">username</a></p>-->
-          </div><!--/.nav-collapse -->
-        </div>
-      </div>
-    </div>
-
-    <div class="container">
-      <div class="row">
-        <div class="span8" id="content">
-<div class="row">
-    <div class="span2">
-        <div class="well">
+    <div class="entry-content">
 <footer class="post-info">
-<abbr class="published" title="2019-10-06T00:00:00+08:00">
-    <i class="icon-calendar"></i>&nbsp;Sun 06 October 2019
-</abbr>
-<br/><a href="/author/treenewbeer.html"><i class="icon-user"></i>&nbsp;TreeNewbeer</a>
+        <abbr class="published" title="2019-10-06T00:00:00+08:00">
+                Published: Sun 06 October 2019
+        </abbr>
+		<br />
+        <abbr class="modified" title="2019-10-06T00:00:00+08:00">
+                Updated: Sun 06 October 2019
+        </abbr>
 
-
-<br/>
-	&nbsp;&nbsp;<a href="/tag/freertos.html" class="label"><i class="icon-tag"></i>&nbsp;FreeRTOS</a>
-</footer><!-- /.post-info -->        </div>
-    </div>
-    <div class="span6">
-<section id="content" class="well">
-    <article>
-        <header>
-            <h1>
-                <a href=""
-                        rel="bookmark"
-                        title="Permalink to ESP-IDF FreeRTOS 任务创建分析">
-                        ESP-IDF FreeRTOS 任务创建分析
-                </a>
-            </h1>
-        </header>
-        <div class="entry-content">
-
-        <h1>ESP-IDF FreeRTOS 任务创建分析</h1>
+        <address class="vcard author">
+                By                         <a class="url fn" href="/author/treenewbeer.html">TreeNewbeer</a>
+        </address>
+<p>In <a href="/category/os.html">OS</a>.</p>
+<p>tags: <a href="/tag/freertos.html">FreeRTOS</a> </p>
+</footer><!-- /.post-info -->      <h1>ESP-IDF FreeRTOS 任务创建分析</h1>
 <p>标签（空格分隔）： ESP-IDF-FreeRTOS</p>
 <hr>
 <h2>任务创建API</h2>
@@ -487,44 +416,39 @@
 <p>上面这个流程只是对新任务分配了具体的物理核心，但并没有加入到当前任务控制块中，也就是<code>pxCurrentTCB</code>这里，从第42行开始进行分配，先判断分配到的核心上面是否有任务在运行，如果没有，则直接执行<code>pxCurrentTCB[ xCoreID ] = pxNewTCB;</code>把任务挂载到当前程序控制块中，并且判断当前是否是系统上电的第一个任务，如果是第一个任务则初始化所有列表(<code>xDelayedTaskList1</code>,<code>xDelayedTaskList2</code>,<code>xPendingReadyList[]</code>, <code>xSuspendedTaskList</code>)这些列表的作用后面再开一节讲这里先不分析。这样子就可以让两个物理核心共享系统初始化的成果，这也是SMP调度策略里面的一个重要概念。如果当前核心上面有运行的任务也就是<code>pxCurrentTCB[ xCoreID ]</code>不等于<code>NULL</code>,然后判断调度器是否正在运行<code>if( xSchedulerRunning == pdFALSE )</code>，<code>xSchedulerRunning</code>也是一个静态全局变量，用来记录调度器的运行状态，如果调度器没有在运行就安排一个较高优先级的任务给它。最后通过<code>prvAddTaskToReadyList()</code>宏函数加入到<em>就绪任务列表</em>，退出临界区。</p>
 <p>继续判断调度器是否正在运行，如果调度器正在运行，则对比<em>新任务</em>与<em>正在运行的任务</em>的优先级，如果新任务优先级更高，则调用<code>taskYIELD_IF_USING_PREEMPTION()</code>宏函数在当前核心强制进行上下文切换，或者通过<code>taskYIELD_OTHER_CORE()</code>函数发送一个CPU中断给另一个核心找出优先级更高的任务。</p>
 <p>最后总一下上面这个函数如此复杂的逻辑，首先用户手动指定具体的物理核心是优先的，如果没有指定，则临时分配一个，然后再判断调度器是否正在运行，如果不在运行则加入<em>任务就绪列表</em>等待调度器启动，否则对比当前运行任务的优先级决定是否需要抢占。</p>
-        </div><!-- /.entry-content -->
-    </article>
+    </div><!-- /.entry-content -->
+
+  </article>
 </section>
-</div>
-</div>
-        </div><!--/span-->
-        <div class="span3 well sidebar-nav" id="sidebar">
-<ul class="nav nav-list">
-<li class="nav-header"><h4><i class="icon-external-link"></i>blogroll</h4></li>
-    <li><div><i class="icon-external-link"></i><a href="http://getpelican.com/">Pelican</a></div></li>
-    <li><div><i class="icon-external-link"></i><a href="http://python.org/">Python.org</a></div></li>
-    <li><div><i class="icon-external-link"></i><a href="http://jinja.pocoo.org/">Jinja2</a></div></li>
-    <li><div><i class="icon-external-link"></i><a href="#">You can modify those links in your config file</a></div></li>
-<li class="nav-header"><h4><i class="icon-home icon-large"></i> social</h4></li>
-    <li><a href="#"><i class="icon-You can add links in your config file-sign icon-large"></i>You can add links in your config file</a></li>
-    <li><a href="#"><i class="icon-Another social link-sign icon-large"></i>Another social link</a></li>
+        <section id="extras" class="body">
+                <div class="blogroll">
+                        <h2>links</h2>
+                        <ul>
+                            <li><a href="http://getpelican.com/">Pelican</a></li>
+                            <li><a href="http://python.org/">Python.org</a></li>
+                            <li><a href="http://jinja.pocoo.org/">Jinja2</a></li>
+                            <li><a href="#">You can modify those links in your config file</a></li>
+                        </ul>
+                </div><!-- /.blogroll -->
+                <div class="social">
+                        <h2>social</h2>
+                        <ul>
+                            <li><a href="/feeds/all.atom.xml" type="application/atom+xml" rel="alternate">atom feed</a></li>
+                            <li><a href="/feeds/all.rss.xml" type="application/rss+xml" rel="alternate">rss feed</a></li>
 
-<li class="nav-header"><h4><i class="icon-folder-close icon-large"></i>Categories</h4></li>
-<li>
-<a href="/category/os.html">
-    <i class="icon-folder-open icon-large"></i>OS
-</a>
-</li>
+                            <li><a href="#">You can add links in your config file</a></li>
+                            <li><a href="#">Another social link</a></li>
+                        </ul>
+                </div><!-- /.social -->
+        </section><!-- /#extras -->
 
+        <footer id="contentinfo" class="body">
+                <address id="about" class="vcard body">
+                Proudly powered by <a href="http://getpelican.com/">Pelican</a>, which takes great advantage of <a href="http://python.org">Python</a>.
+                </address><!-- /#about -->
 
+                <p>The theme is by <a href="http://coding.smashingmagazine.com/2009/08/04/designing-a-html-5-layout-from-scratch/">Smashing Magazine</a>, thanks!</p>
+        </footer><!-- /#contentinfo -->
 
-</ul>        </div><!--/.well -->
-
-      </div><!--/row-->
-
-      <hr>
-
-    </div><!--/.fluid-container-->
-
-
-    <!-- Le javascript -->
-    <!-- Placed at the end of the document so the pages load faster -->
-    <script src="/theme/js/jquery-1.7.2.min.js"></script>
-    <script src="/theme/js/bootstrap.min.js"></script>
-  </body>
+</body>
 </html>
