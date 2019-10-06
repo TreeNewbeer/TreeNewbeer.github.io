@@ -9,6 +9,8 @@ SITEURL = ''
 PATH = 'content'
 STATIC_PATHS = ['pic']
 
+THEME = '/home/genius/blog/pelican-themes/new-bootstrap2'
+
 TIMEZONE = 'Asia/Shanghai'
 
 DEFAULT_LANG = 'en'
